@@ -119,7 +119,11 @@ function addTurn(userId, role, content) {
   const now = Date.now();
   cleanupTurns(now);
   const entry = inMemoryTurns.get(userId);
-  const turns = entry ? entry.turns : [];
+  // Handle both old format (array) and new format (object with turns and lastAt)
+  let turns = [];
+  if (entry) {
+    turns = Array.isArray(entry) ? entry : entry.turns;
+  }
   const updated = [...turns, { role, content }].slice(-6);
   inMemoryTurns.set(userId, { turns: updated, lastAt: now });
   return updated;
@@ -128,6 +132,10 @@ function addTurn(userId, role, content) {
 function cleanupTurns(now) {
   // Remove entries that have been inactive for longer than TURNS_TTL_MS
   for (const [userId, entry] of inMemoryTurns) {
+    // Skip old format entries (arrays) or entries without lastAt
+    if (Array.isArray(entry) || !entry.lastAt) {
+      continue;
+    }
     if (now - entry.lastAt > TURNS_TTL_MS) {
       inMemoryTurns.delete(userId);
     }
@@ -135,8 +143,10 @@ function cleanupTurns(now) {
 
   // If the map is still too large, evict oldest entries until under the limit
   if (inMemoryTurns.size > MAX_TURNS_SIZE) {
-    const sorted = Array.from(inMemoryTurns.entries()).sort((a, b) => a[1].lastAt - b[1].lastAt);
-    const toDelete = sorted.slice(0, inMemoryTurns.size - MAX_TURNS_SIZE);
+    const sorted = Array.from(inMemoryTurns.entries())
+      .filter(([, entry]) => !Array.isArray(entry) && entry.lastAt)
+      .sort((a, b) => a[1].lastAt - b[1].lastAt);
+    const toDelete = sorted.slice(0, Math.max(0, inMemoryTurns.size - MAX_TURNS_SIZE));
     for (const [userId] of toDelete) {
       inMemoryTurns.delete(userId);
     }
