@@ -21,6 +21,12 @@ db.exec(`
     content TEXT NOT NULL,
     created_at INTEGER NOT NULL
   );
+
+  CREATE INDEX IF NOT EXISTS idx_user_messages_user_id
+    ON user_messages(user_id);
+
+  CREATE INDEX IF NOT EXISTS idx_user_messages_created_at
+    ON user_messages(created_at);
 `);
 
 const insertMessageStmt = db.prepare(
@@ -76,12 +82,40 @@ function extractSummaryNotes(message) {
 
 function normalizeSummary(currentSummary, newNotes) {
   if (!newNotes.length) return currentSummary;
-  const lines = currentSummary ? currentSummary.split('\n') : [];
-  const set = new Set(lines.filter(Boolean));
-  for (const note of newNotes) {
-    set.add(note);
+  
+  const existingLines = currentSummary ? currentSummary.split('\n').filter(Boolean) : [];
+
+  // Build a map of label -> line, preserving the order of first appearance.
+  const labelOrder = [];
+  const lineByLabel = new Map();
+
+  const extractLabel = (line) => {
+    const idx = line.indexOf(':');
+    if (idx === -1) {
+      return line.trim();
+    }
+    return line.slice(0, idx).trim();
+  };
+
+  // Load existing summary lines.
+  for (const line of existingLines) {
+    const label = extractLabel(line);
+    if (!lineByLabel.has(label)) {
+      labelOrder.push(label);
+    }
+    lineByLabel.set(label, line);
   }
-  return Array.from(set).join('\n');
+
+  // Apply new notes, replacing any existing entry with the same label.
+  for (const note of newNotes) {
+    const label = extractLabel(note);
+    if (!lineByLabel.has(label)) {
+      labelOrder.push(label);
+    }
+    lineByLabel.set(label, note);
+  }
+
+  return labelOrder.map((label) => lineByLabel.get(label)).join('\n');
 }
 
 export function getUserSettings(userId) {

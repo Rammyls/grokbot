@@ -1,7 +1,19 @@
 const EDIT_WINDOW_MS = 60_000;
 const EDIT_THROTTLE_MS = 2000;
+const CLEANUP_INTERVAL_MS = 60_000; // 1 minute
 
 const editState = new Map();
+
+function cleanupStaleEntries() {
+  const now = Date.now();
+  for (const [messageId, entry] of editState.entries()) {
+    if (now - entry.createdAt > EDIT_WINDOW_MS) {
+      editState.delete(messageId);
+    }
+  }
+}
+
+setInterval(cleanupStaleEntries, CLEANUP_INTERVAL_MS);
 
 export function trackReply({ userMessageId, botReplyId }) {
   editState.set(userMessageId, {

@@ -1,6 +1,19 @@
 const COOLDOWN_MS = 3000;
+const MAX_ENTRY_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
 const state = new Map();
+
+function cleanupStaleEntries() {
+  const now = Date.now();
+  for (const [userId, entry] of state.entries()) {
+    if (now - entry.lastAt > MAX_ENTRY_AGE_MS) {
+      state.delete(userId);
+    }
+  }
+}
+
+setInterval(cleanupStaleEntries, CLEANUP_INTERVAL_MS);
 
 export function checkRateLimit(userId, prompt) {
   const now = Date.now();

@@ -47,7 +47,35 @@ const client = new Client({
   partials: [Partials.Channel, Partials.Message],
 });
 
-const inMemoryTurns = new Map();
+const MAX_IN_MEMORY_TURNS = 1000;
+
+class BoundedMap extends Map {
+  constructor(maxSize) {
+    super();
+    this.maxSize = maxSize;
+  }
+
+  set(key, value) {
+    // If key already exists, delete it first so that the reinsertion
+    // updates its recency while keeping overall behavior consistent.
+    if (this.has(key)) {
+      super.delete(key);
+    }
+
+    super.set(key, value);
+
+    if (this.size > this.maxSize) {
+      const firstKey = this.keys().next().value;
+      if (firstKey !== undefined) {
+        super.delete(firstKey);
+      }
+    }
+
+    return this;
+  }
+}
+
+const inMemoryTurns = new BoundedMap(MAX_IN_MEMORY_TURNS);
 
 const slashCommands = [
   new SlashCommandBuilder()
@@ -207,7 +235,7 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
   const replyId = getReplyId(hydrated.id);
   if (!replyId) return;
 
-  const replyFn = async (text, isEdit = false) => {
+  const replyFn = async (text) => {
     const messageToEdit = await hydrated.channel.messages.fetch(replyId);
     await messageToEdit.edit({ content: text });
   };
