@@ -184,9 +184,32 @@ function isPrivateIp(address) {
     return false;
   }
   if (net.isIPv6(address)) {
-    if (address === '::1') return true;
-    if (address.startsWith('fc') || address.startsWith('fd')) return true;
-    if (address.startsWith('fe80')) return true;
+    // Normalize to lowercase for consistent checking
+    const normalized = address.toLowerCase();
+    
+    // Parse the IPv6 address to handle various representations
+    // For loopback, check common representations
+    if (normalized === '::1' || 
+        normalized === '0:0:0:0:0:0:0:1' ||
+        normalized === '0000:0000:0000:0000:0000:0000:0000:0001') {
+      return true;
+    }
+    
+    // For other private ranges, check the first segment
+    // Unique Local Addresses (ULA): fc00::/7 and Link-local: fe80::/10
+    const segments = normalized.split(':');
+    const firstSegment = segments[0];
+    
+    if (firstSegment && firstSegment !== '') {
+      const firstHex = parseInt(firstSegment, 16);
+      if (!isNaN(firstHex)) {
+        // fc00::/7 covers fc00-fdff (0xfc00-0xfdff in first 16 bits)
+        if (firstHex >= 0xfc00 && firstHex <= 0xfdff) return true;
+        // Link-local addresses: fe80::/10
+        // This covers fe80-febf (0xfe80-0xfebf in first 16 bits)
+        if (firstHex >= 0xfe80 && firstHex <= 0xfebf) return true;
+      }
+    }
   }
   return false;
 }
