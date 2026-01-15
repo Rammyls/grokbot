@@ -10,6 +10,7 @@ A production-ready Discord bot built with **discord.js v14** and Grok (OpenAI-co
 - Channel allowlist for memory writes in guilds.
 - Per-user cooldown and duplicate spam guard.
 - Message edit handling with re-runs (60s window, throttled).
+- Image support (attachments, embeds, and image URLs) with vision model routing (requires `GROK_VISION_MODEL` to be configured).
 
 ## Setup
 
@@ -31,7 +32,8 @@ Required vars:
 
 Optional:
 - `GROK_MODEL` (default: `grok-beta`)
-- `BOT_NAME` (default: `GrokBuddy`)
+- `GROK_VISION_MODEL` (required for image understanding)
+- `BOT_NAME` (default: `Grok`)
 - `SUPER_ADMIN_USER_ID` (bypasses channel permission checks)
 
 ### 3) Run
@@ -47,6 +49,11 @@ Slash commands are registered automatically on startup.
 In a server channel:
 ```
 @BotName whats good
+```
+
+Replying to another message with an image also works:
+```
+@BotName what is this
 ```
 
 ### Slash command
@@ -72,7 +79,7 @@ DMs are allowed for memory writes when the user has memory enabled.
 - The bot stores full user messages **only** from allowed channels.
 - A short in-memory window of recent turns is used for context.
 - A lightweight summary is kept per user and sent to Grok.
-- Hate speech and protected-class harassment are blocked before the LLM.
+- A basic keyword filter runs before the LLM to block some obvious hate speech and protected-class harassment, but it is not a comprehensive content moderation system and may miss abusive content.
 
 ## Data storage
 SQLite is used via `better-sqlite3` and stored in `data.db` in the project root.

@@ -21,12 +21,6 @@ db.exec(`
     content TEXT NOT NULL,
     created_at INTEGER NOT NULL
   );
-
-  CREATE INDEX IF NOT EXISTS idx_user_messages_user_id
-    ON user_messages(user_id);
-
-  CREATE INDEX IF NOT EXISTS idx_user_messages_created_at
-    ON user_messages(created_at);
 `);
 
 const insertMessageStmt = db.prepare(
@@ -69,12 +63,18 @@ const SUMMARY_HINTS = [
   { regex: /my pronouns are ([^.!?]+)/i, label: 'Pronouns' },
 ];
 
+const MAX_CAPTURED_TEXT_LENGTH = 200;
+
 function extractSummaryNotes(message) {
   const notes = [];
   for (const hint of SUMMARY_HINTS) {
     const match = message.match(hint.regex);
     if (match?.[1]) {
-      notes.push(`${hint.label}: ${match[1].trim()}`);
+      const captured = match[1].trim();
+      if (captured.length > MAX_CAPTURED_TEXT_LENGTH) {
+        continue;
+      }
+      notes.push(`${hint.label}: ${captured}`);
     }
   }
   return notes;
@@ -82,40 +82,12 @@ function extractSummaryNotes(message) {
 
 function normalizeSummary(currentSummary, newNotes) {
   if (!newNotes.length) return currentSummary;
-  
-  const existingLines = currentSummary ? currentSummary.split('\n').filter(Boolean) : [];
-
-  // Build a map of label -> line, preserving the order of first appearance.
-  const labelOrder = [];
-  const lineByLabel = new Map();
-
-  const extractLabel = (line) => {
-    const idx = line.indexOf(':');
-    if (idx === -1) {
-      return line.trim();
-    }
-    return line.slice(0, idx).trim();
-  };
-
-  // Load existing summary lines.
-  for (const line of existingLines) {
-    const label = extractLabel(line);
-    if (!lineByLabel.has(label)) {
-      labelOrder.push(label);
-    }
-    lineByLabel.set(label, line);
-  }
-
-  // Apply new notes, replacing any existing entry with the same label.
+  const lines = currentSummary ? currentSummary.split('\n') : [];
+  const set = new Set(lines.filter(Boolean));
   for (const note of newNotes) {
-    const label = extractLabel(note);
-    if (!lineByLabel.has(label)) {
-      labelOrder.push(label);
-    }
-    lineByLabel.set(label, note);
+    set.add(note);
   }
-
-  return labelOrder.map((label) => lineByLabel.get(label)).join('\n');
+  return Array.from(set).join('\n');
 }
 
 export function getUserSettings(userId) {

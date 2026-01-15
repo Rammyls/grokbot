@@ -1,6 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises';
 
 const DEFAULT_MODEL = process.env.GROK_MODEL || 'grok-beta';
+const DEFAULT_VISION_MODEL = process.env.GROK_VISION_MODEL || '';
 
 const systemPrompt = `You are a Discord assistant named {BOT_NAME}.
 Guidelines:
@@ -17,13 +18,27 @@ Guidelines:
 const fallbackErrorLine =
   'cant answer rn bro too busy gooning (grok servers left like my dad)';
 
-function buildMessages({ botName, profileSummary, recentTurns, userContent }) {
+function buildMessages({
+  botName,
+  profileSummary,
+  recentTurns,
+  userContent,
+  replyContext,
+  imageInputs,
+}) {
   const messages = [
     {
       role: 'system',
       content: systemPrompt.replace('{BOT_NAME}', botName),
     },
   ];
+
+  if (replyContext) {
+    messages.push({
+      role: 'system',
+      content: replyContext,
+    });
+  }
 
   if (profileSummary) {
     messages.push({
@@ -36,11 +51,32 @@ function buildMessages({ botName, profileSummary, recentTurns, userContent }) {
     messages.push({ role: turn.role, content: turn.content });
   }
 
-  messages.push({ role: 'user', content: userContent });
+  if (imageInputs?.length) {
+    messages.push({
+      role: 'user',
+      content: [
+        { type: 'text', text: userContent },
+        ...imageInputs.map((url) => ({
+          type: 'image_url',
+          image_url: { url },
+        })),
+      ],
+    });
+  } else {
+    messages.push({ role: 'user', content: userContent });
+  }
   return messages;
 }
 
-async function callOnce({ botName, profileSummary, recentTurns, userContent }) {
+async function callOnce({
+  botName,
+  profileSummary,
+  recentTurns,
+  userContent,
+  replyContext,
+  imageInputs,
+}) {
+  const model = imageInputs?.length ? DEFAULT_VISION_MODEL || DEFAULT_MODEL : DEFAULT_MODEL;
   const res = await fetch(`${process.env.GROK_BASE_URL}/v1/chat/completions`, {
     method: 'POST',
     headers: {
@@ -48,10 +84,17 @@ async function callOnce({ botName, profileSummary, recentTurns, userContent }) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: DEFAULT_MODEL,
+      model,
       temperature: 0.8,
       max_tokens: 250,
-      messages: buildMessages({ botName, profileSummary, recentTurns, userContent }),
+      messages: buildMessages({
+        botName,
+        profileSummary,
+        recentTurns,
+        userContent,
+        replyContext,
+        imageInputs,
+      }),
     }),
   });
 
@@ -68,13 +111,29 @@ export async function getLLMResponse({
   profileSummary,
   recentTurns,
   userContent,
+  replyContext,
+  imageInputs,
 }) {
   try {
-    return await callOnce({ botName, profileSummary, recentTurns, userContent });
+    return await callOnce({
+      botName,
+      profileSummary,
+      recentTurns,
+      userContent,
+      replyContext,
+      imageInputs,
+    });
   } catch (err) {
     await delay(300);
     try {
-      return await callOnce({ botName, profileSummary, recentTurns, userContent });
+      return await callOnce({
+        botName,
+        profileSummary,
+        recentTurns,
+        userContent,
+        replyContext,
+        imageInputs,
+      });
     } catch (retryErr) {
       return fallbackErrorLine;
     }
