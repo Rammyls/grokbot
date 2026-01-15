@@ -1,4 +1,4 @@
-# GrokBot Discord Assistant
+# Grok
 
 A production-ready Discord bot built with **discord.js v14** and Grok (OpenAI-compatible) chat completions. It supports mentions, slash commands, DMs, per-user memory, and strong anti-abuse controls.
 
