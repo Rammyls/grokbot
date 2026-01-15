@@ -260,7 +260,8 @@ async function fetchImageAsDataUrl(url) {
     const buffer = Buffer.concat(chunks);
     const base64 = buffer.toString('base64');
     return `data:${contentType};base64,${base64}`;
-  } catch {
+  } catch (error) {
+    console.error('Failed to fetch image:', url, error.message);
     return null;
   } finally {
     clearTimeout(timeout);
@@ -313,15 +314,22 @@ async function handlePrompt({
   const settings = getUserSettings(userId);
   const allowed = isAllowedToStore(channelId, isDirect);
   if (settings.memory_enabled && allowed) {
+    // If there is no prompt, choose a sensible textual fallback.
     let memoryContent = prompt;
-    if (!memoryContent && imageUrls?.length) {
-      memoryContent = 'User sent an image.';
+    if (!memoryContent) {
+      if (replyContextText) {
+        // Prefer to describe that the user replied to a message.
+        memoryContent = 'User replied to a message.';
+      } else if (imageUrls?.length) {
+        // No prompt, only images: we'll use the image note by itself below.
+        memoryContent = '';
+      }
     }
-    if (!memoryContent && replyContextText) {
-      memoryContent = 'User replied to a message.';
-    }
+
+    // Append or create a concise image note when images are present.
     if (imageUrls?.length) {
-      memoryContent = `${memoryContent} [shared ${imageUrls.length} image(s)]`;
+      const imageNote = `[shared ${imageUrls.length} image(s)]`;
+      memoryContent = memoryContent ? `${memoryContent} ${imageNote}` : imageNote;
     }
     recordUserMessage({ userId, channelId, content: memoryContent });
   }
@@ -334,13 +342,14 @@ async function handlePrompt({
       if (dataUrl) imageInputs.push(dataUrl);
     }
   }
-  const effectivePrompt =
-    prompt ||
-    (imageInputs.length ? 'User sent an image.' : '') ||
-    (replyContextText ? 'Following up on the replied message.' : '');
-  const recentTurns = effectivePrompt
-    ? addTurn(userId, 'user', effectivePrompt)
-    : addTurn(userId, 'user', '...');
+  let effectivePrompt = prompt;
+  if (!effectivePrompt && imageInputs.length) {
+    effectivePrompt = 'User sent an image.';
+  }
+  if (!effectivePrompt && replyContextText) {
+    effectivePrompt = 'Following up on the replied message.';
+  }
+  const recentTurns = addTurn(userId, 'user', effectivePrompt);
   const response = await getLLMResponse({
     botName: BOT_NAME,
     profileSummary,
@@ -412,7 +421,7 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
   const replyId = getReplyId(hydrated.id);
   if (!replyId) return;
 
-  const replyFn = async (text, isEdit = false) => {
+  const replyFn = async (text) => {
     const messageToEdit = await hydrated.channel.messages.fetch(replyId);
     await messageToEdit.edit({ content: text });
   };
