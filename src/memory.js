@@ -63,18 +63,12 @@ const SUMMARY_HINTS = [
   { regex: /my pronouns are ([^.!?]+)/i, label: 'Pronouns' },
 ];
 
-const MAX_CAPTURED_TEXT_LENGTH = 200;
-
 function extractSummaryNotes(message) {
   const notes = [];
   for (const hint of SUMMARY_HINTS) {
     const match = message.match(hint.regex);
     if (match?.[1]) {
-      const captured = match[1].trim();
-      if (captured.length > MAX_CAPTURED_TEXT_LENGTH) {
-        continue;
-      }
-      notes.push(`${hint.label}: ${captured}`);
+      notes.push(`${hint.label}: ${match[1].trim()}`);
     }
   }
   return notes;

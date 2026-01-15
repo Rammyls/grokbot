@@ -1,7 +1,16 @@
 import { setTimeout as delay } from 'node:timers/promises';
 
-const DEFAULT_MODEL = process.env.GROK_MODEL || 'grok-beta';
+const DEFAULT_MODEL = process.env.GROK_MODEL || 'grok-4';
 const DEFAULT_VISION_MODEL = process.env.GROK_VISION_MODEL || '';
+
+function normalizeBaseUrl(baseUrl) {
+  if (!baseUrl) return '';
+  let url = baseUrl.replace(/\/+$/, '');
+  while (url.endsWith('/v1')) {
+    url = url.slice(0, -3); // remove the trailing "/v1"
+  }
+  return url;
+}
 
 const systemPrompt = `You are a Discord assistant named {BOT_NAME}.
 Guidelines:
@@ -58,7 +67,7 @@ function buildMessages({
         { type: 'text', text: userContent },
         ...imageInputs.map((url) => ({
           type: 'image_url',
-          image_url: { url },
+          image_url: { url, detail: 'high' },
         })),
       ],
     });
@@ -77,7 +86,8 @@ async function callOnce({
   imageInputs,
 }) {
   const model = imageInputs?.length ? DEFAULT_VISION_MODEL || DEFAULT_MODEL : DEFAULT_MODEL;
-  const res = await fetch(`${process.env.GROK_BASE_URL}/v1/chat/completions`, {
+  const baseUrl = normalizeBaseUrl(process.env.GROK_BASE_URL);
+  const res = await fetch(`${baseUrl}/v1/chat/completions`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${process.env.GROK_API_KEY}`,
@@ -99,7 +109,16 @@ async function callOnce({
   });
 
   if (!res.ok) {
-    throw new Error(`LLM error: ${res.status}`);
+    const bodyText = await res.text();
+    if (
+      imageInputs?.length &&
+      /image|vision|multimodal|unsupported|not\s+enabled/i.test(bodyText)
+    ) {
+      const err = new Error('VISION_UNSUPPORTED');
+      err.code = 'VISION_UNSUPPORTED';
+      throw err;
+    }
+    throw new Error(`LLM error: ${res.status} ${bodyText}`);
   }
 
   const data = await res.json();
@@ -124,6 +143,9 @@ export async function getLLMResponse({
       imageInputs,
     });
   } catch (err) {
+    if (err?.code === 'VISION_UNSUPPORTED') {
+      return 'image input needs a vision-capable model. set GROK_VISION_MODEL or use a multimodal GROK_MODEL.';
+    }
     await delay(300);
     try {
       return await callOnce({
@@ -135,6 +157,9 @@ export async function getLLMResponse({
         imageInputs,
       });
     } catch (retryErr) {
+      if (retryErr?.code === 'VISION_UNSUPPORTED') {
+        return 'image input needs a vision-capable model. set GROK_VISION_MODEL or use a multimodal GROK_MODEL.';
+      }
       return fallbackErrorLine;
     }
   }

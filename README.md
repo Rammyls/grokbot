@@ -1,4 +1,4 @@
-# Grok
+# GrokBot Discord Assistant
 
 A production-ready Discord bot built with **discord.js v14** and Grok (OpenAI-compatible) chat completions. It supports mentions, slash commands, DMs, per-user memory, and strong anti-abuse controls.
 
@@ -10,7 +10,7 @@ A production-ready Discord bot built with **discord.js v14** and Grok (OpenAI-co
 - Channel allowlist for memory writes in guilds.
 - Per-user cooldown and duplicate spam guard.
 - Message edit handling with re-runs (60s window, throttled).
-- Image support (attachments, embeds, and image URLs) with vision model routing (requires `GROK_VISION_MODEL` to be configured).
+- Image support (attachments, embeds, and image URLs) with vision model routing.
 
 ## Setup
 
@@ -28,12 +28,12 @@ cp .env.example .env
 Required vars:
 - `DISCORD_TOKEN`
 - `GROK_API_KEY`
-- `GROK_BASE_URL`
+- `GROK_BASE_URL` (recommended: `https://api.x.ai`)
 
 Optional:
-- `GROK_MODEL` (default: `grok-beta`)
-- `GROK_VISION_MODEL` (required for image understanding)
-- `BOT_NAME` (default: `Grok`)
+- `GROK_MODEL` (default: `grok-4`)
+- `GROK_VISION_MODEL` (optional override used only when images are present)
+- `BOT_NAME` (default: `GrokBuddy`)
 - `SUPER_ADMIN_USER_ID` (bypasses channel permission checks)
 
 ### 3) Run
@@ -79,7 +79,7 @@ DMs are allowed for memory writes when the user has memory enabled.
 - The bot stores full user messages **only** from allowed channels.
 - A short in-memory window of recent turns is used for context.
 - A lightweight summary is kept per user and sent to Grok.
-- A basic keyword filter runs before the LLM to block some obvious hate speech and protected-class harassment, but it is not a comprehensive content moderation system and may miss abusive content.
+- Hate speech and protected-class harassment are blocked before the LLM.
 
 ## Data storage
 SQLite is used via `better-sqlite3` and stored in `data.db` in the project root.

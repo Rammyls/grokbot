@@ -32,7 +32,6 @@ const {
   GROK_API_KEY,
   BOT_NAME = 'GrokBuddy',
   SUPER_ADMIN_USER_ID,
-  GROK_VISION_MODEL,
 } = process.env;
 
 if (!DISCORD_TOKEN || !GROK_BASE_URL || !GROK_API_KEY) {
@@ -51,8 +50,6 @@ const client = new Client({
 });
 
 const inMemoryTurns = new Map();
-const TURNS_TTL_MS = 60 * 60 * 1000; // 1 hour
-const MAX_TURNS_SIZE = 10000;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGES = 4;
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif)(\?.*)?$/i;
@@ -116,41 +113,10 @@ function stripMention(content) {
 }
 
 function addTurn(userId, role, content) {
-  const now = Date.now();
-  cleanupTurns(now);
-  const entry = inMemoryTurns.get(userId);
-  // Handle both old format (array) and new format (object with turns and lastAt)
-  let turns = [];
-  if (entry) {
-    turns = Array.isArray(entry) ? entry : entry.turns;
-  }
+  const turns = inMemoryTurns.get(userId) || [];
   const updated = [...turns, { role, content }].slice(-6);
-  inMemoryTurns.set(userId, { turns: updated, lastAt: now });
+  inMemoryTurns.set(userId, updated);
   return updated;
-}
-
-function cleanupTurns(now) {
-  // Remove entries that have been inactive for longer than TURNS_TTL_MS
-  for (const [userId, entry] of inMemoryTurns) {
-    // Skip old format entries (arrays) or entries without lastAt
-    if (Array.isArray(entry) || !entry.lastAt) {
-      continue;
-    }
-    if (now - entry.lastAt > TURNS_TTL_MS) {
-      inMemoryTurns.delete(userId);
-    }
-  }
-
-  // If the map is still too large, evict oldest entries until under the limit
-  if (inMemoryTurns.size > MAX_TURNS_SIZE) {
-    const sorted = Array.from(inMemoryTurns.entries())
-      .filter(([, entry]) => !Array.isArray(entry) && entry.lastAt)
-      .sort((a, b) => a[1].lastAt - b[1].lastAt);
-    const toDelete = sorted.slice(0, Math.max(0, inMemoryTurns.size - MAX_TURNS_SIZE));
-    for (const [userId] of toDelete) {
-      inMemoryTurns.delete(userId);
-    }
-  }
 }
 
 function isDM(message) {
@@ -218,9 +184,50 @@ function isPrivateIp(address) {
     return false;
   }
   if (net.isIPv6(address)) {
-    if (address === '::1') return true;
-    if (address.startsWith('fc') || address.startsWith('fd')) return true;
-    if (address.startsWith('fe80')) return true;
+    // Normalize to lowercase for consistent checking
+    const normalized = address.toLowerCase();
+    
+    // Parse the IPv6 address to handle various representations
+    // For loopback, check common representations
+    if (normalized === '::1' || 
+        normalized === '0:0:0:0:0:0:0:1' ||
+        normalized === '0000:0000:0000:0000:0000:0000:0000:0001') {
+      return true;
+    }
+    
+    // For other private ranges, we need to check if they START with the private prefix
+    // Unique Local Addresses (ULA): fc00::/7 and Link-local: fe80::/10
+    
+    // Split the address into segments
+    const segments = normalized.split(':');
+    
+    // If the address starts with '::', the first actual segment is at index 0 or 1
+    // but represents zeros. We need the first NON-ZERO segment that's actually first.
+    // However, if it starts with '::' followed by something, that something is NOT
+    // the first segment of the expanded address.
+    
+    // Check if it starts with fc, fd, or fe80 (not preceded by ::)
+    if (normalized.startsWith('fc') || normalized.startsWith('fd')) {
+      // Extract first segment to validate it's in the right range
+      const firstSegment = segments[0];
+      if (firstSegment) {
+        const firstHex = parseInt(firstSegment, 16);
+        if (!isNaN(firstHex) && firstHex >= 0xfc00 && firstHex <= 0xfdff) {
+          return true;
+        }
+      }
+    }
+    
+    if (normalized.startsWith('fe')) {
+      const firstSegment = segments[0];
+      if (firstSegment) {
+        const firstHex = parseInt(firstSegment, 16);
+        // Link-local: fe80::/10 covers fe80-febf
+        if (!isNaN(firstHex) && firstHex >= 0xfe80 && firstHex <= 0xfebf) {
+          return true;
+        }
+      }
+    }
   }
   return false;
 }
@@ -270,8 +277,7 @@ async function fetchImageAsDataUrl(url) {
     const buffer = Buffer.concat(chunks);
     const base64 = buffer.toString('base64');
     return `data:${contentType};base64,${base64}`;
-  } catch (error) {
-    console.error('Failed to fetch image:', url, error.message);
+  } catch {
     return null;
   } finally {
     clearTimeout(timeout);
@@ -316,30 +322,18 @@ async function handlePrompt({
     return;
   }
 
-  if (imageUrls?.length && !GROK_VISION_MODEL) {
-    await reply('cant see images right now');
-    return;
-  }
-
   const settings = getUserSettings(userId);
   const allowed = isAllowedToStore(channelId, isDirect);
   if (settings.memory_enabled && allowed) {
-    // If there is no prompt, choose a sensible textual fallback.
     let memoryContent = prompt;
-    if (!memoryContent) {
-      if (replyContextText) {
-        // Prefer to describe that the user replied to a message.
-        memoryContent = 'User replied to a message.';
-      } else if (imageUrls?.length) {
-        // No prompt, only images: we'll use the image note by itself below.
-        memoryContent = '';
-      }
+    if (!memoryContent && imageUrls?.length) {
+      memoryContent = 'User sent an image.';
     }
-
-    // Append or create a concise image note when images are present.
-    if (imageUrls?.length) {
-      const imageNote = `[shared ${imageUrls.length} image(s)]`;
-      memoryContent = memoryContent ? `${memoryContent} ${imageNote}` : imageNote;
+    if (!memoryContent && replyContextText) {
+      memoryContent = 'User replied to a message.';
+    }
+    if (imageUrls?.length && memoryContent && !/\bimage\b/i.test(memoryContent)) {
+      memoryContent = `${memoryContent} [shared ${imageUrls.length} image(s)]`;
     }
     recordUserMessage({ userId, channelId, content: memoryContent });
   }
@@ -352,17 +346,19 @@ async function handlePrompt({
       if (dataUrl) imageInputs.push(dataUrl);
     }
   }
-  let effectivePrompt = prompt;
-  if (!effectivePrompt && imageInputs.length) {
+  let effectivePrompt;
+  if (typeof prompt === 'string' && prompt !== '') {
+    effectivePrompt = prompt;
+  } else if (imageInputs.length > 0) {
     effectivePrompt = 'User sent an image.';
-  }
-  if (!effectivePrompt && replyContextText) {
+  } else if (typeof replyContextText === 'string' && replyContextText.trim() !== '') {
     effectivePrompt = 'Following up on the replied message.';
+  } else {
+    effectivePrompt = '';
   }
-  if (!effectivePrompt) {
-    effectivePrompt = '...';
-  }
-  const recentTurns = addTurn(userId, 'user', effectivePrompt);
+  const recentTurns = effectivePrompt
+    ? addTurn(userId, 'user', effectivePrompt)
+    : addTurn(userId, 'user', '...');
   const response = await getLLMResponse({
     botName: BOT_NAME,
     profileSummary,
@@ -434,7 +430,7 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
   const replyId = getReplyId(hydrated.id);
   if (!replyId) return;
 
-  const replyFn = async (text) => {
+  const replyFn = async (text, isEdit = false) => {
     const messageToEdit = await hydrated.channel.messages.fetch(replyId);
     await messageToEdit.edit({ content: text });
   };
