@@ -130,6 +130,12 @@ const slashCommands = [
         .setName('question')
         .setDescription('What do you want to ask?')
         .setRequired(true)
+    )
+    .addBooleanOption((option) =>
+      option
+        .setName('ghost')
+        .setDescription('Make the response visible only to you (ghost message)')
+        .setRequired(false)
     ),
   new SlashCommandBuilder()
     .setName('memory')
@@ -604,6 +610,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (commandName === 'ask') {
       const question = interaction.options.getString('question', true);
+      const ghost = interaction.options.getBoolean('ghost') ?? true; // Default to true (ephemeral)
       const settings = getUserSettings(interaction.user.id);
       const memoryChannel = interaction.channel?.isDMBased?.()
         ? true
@@ -617,12 +624,12 @@ client.on('interactionCreate', async (interaction) => {
           if (interaction.deferred) {
             reply = await interaction.editReply({ content: text });
           } else if (interaction.replied) {
-            reply = await interaction.followUp({ content: text });
+            reply = await interaction.followUp({ content: text, ephemeral: ghost });
           } else {
-            reply = await interaction.reply({ content: text });
+            reply = await interaction.reply({ content: text, ephemeral: ghost });
           }
-          // Track bot message for purge functionality
-          if (reply?.id) {
+          // Track bot message for purge functionality (only track non-ephemeral messages)
+          if (reply?.id && !ghost) {
             trackBotMessage(reply.id, interaction.channelId, interaction.guildId);
           }
         } catch (err) {
@@ -636,7 +643,7 @@ client.on('interactionCreate', async (interaction) => {
       const typingFn = async () => {
         try {
           if (!interaction.deferred && !interaction.replied) {
-            await interaction.deferReply();
+            await interaction.deferReply({ ephemeral: ghost });
           }
         } catch (err) {
           if (err.code === DISCORD_INTERACTION_EXPIRED_CODE) {

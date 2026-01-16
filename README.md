@@ -59,8 +59,15 @@ Replying to another message with an image also works:
 
 ### Slash command
 ```
-/ask question: whats good
+/ask question:whats good
+/ask question:whats good ghost:false   (visible to everyone)
+/ask question:whats good ghost:true    (visible only to you - default)
 ```
+
+The `ghost` parameter controls message visibility:
+- `ghost:true` (default) - Only you can see the bot's response (ephemeral message)
+- `ghost:false` - Everyone in the channel can see the bot's response
+
 
 ### Memory controls
 - `/memory on` — enable memory
@@ -82,7 +89,7 @@ Memory starts disabled for all **guild channels**. In allowlisted guild channels
 
 ### DM Support
 The bot works fully in DMs with the same memory and conversation features as in guilds:
-- Use `/ask` to interact with the bot
+- Use `/ask` to interact with the bot (the `ghost` parameter has no effect in DMs)
 - Direct messages work without needing to mention the bot
 - Memory is enabled by default (can be toggled with `/memory on/off`)
 - All conversation history and preferences are preserved
