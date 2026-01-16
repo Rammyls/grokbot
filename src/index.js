@@ -856,28 +856,58 @@ client.on('interactionCreate', async (interaction) => {
         let deletedCount = 0;
         let failedCount = 0;
 
-        // Delete messages from Discord
-        for (const messageId of messageIds) {
+        // Helper to get human-readable timeframe text
+        const timeframeLabels = {
+          '1h': '1 hour',
+          '6h': '6 hours',
+          '12h': '12 hours',
+          '24h': '24 hours',
+          '7d': '7 days',
+          '30d': '30 days',
+          'all': 'all time'
+        };
+        const timeframeText = timeframeLabels[timeframe] || timeframe;
+
+        // Try bulk delete for messages less than 14 days old
+        const fourteenDaysAgo = Date.now() - (14 * 24 * 60 * 60 * 1000);
+        const canUseBulkDelete = sinceTimestamp >= fourteenDaysAgo && messageIds.length >= 2;
+        let bulkDeleteSucceeded = false;
+
+        if (canUseBulkDelete && messageIds.length <= 100) {
+          // Use bulk delete API (max 100 messages at a time)
           try {
-            const msg = await channel.messages.fetch(messageId);
-            await msg.delete();
-            deletedCount++;
+            await channel.bulkDelete(messageIds, true);
+            deletedCount = messageIds.length;
+            bulkDeleteSucceeded = true;
+            // Clean up database records for successfully deleted messages
+            for (const messageId of messageIds) {
+              deleteBotMessageRecord(messageId);
+            }
           } catch (err) {
-            // Message might already be deleted or bot lacks permission
-            failedCount++;
-            console.log(`Failed to delete message ${messageId}:`, err.message);
+            console.log('Bulk delete failed, falling back to individual deletion:', err.message);
           }
-          // Delete from database regardless
-          deleteBotMessageRecord(messageId);
         }
 
-        const timeframeText = timeframe === 'all' ? 'all time' : 
-          timeframe === '1h' ? '1 hour' :
-          timeframe === '6h' ? '6 hours' :
-          timeframe === '12h' ? '12 hours' :
-          timeframe === '24h' ? '24 hours' :
-          timeframe === '7d' ? '7 days' :
-          timeframe === '30d' ? '30 days' : timeframe;
+        // Individual deletion for messages older than 14 days or when bulk delete fails
+        if (!bulkDeleteSucceeded) {
+          for (const messageId of messageIds) {
+            try {
+              const msg = await channel.messages.fetch(messageId);
+              await msg.delete();
+              deletedCount++;
+              // Only delete from database if Discord deletion succeeded
+              deleteBotMessageRecord(messageId);
+            } catch (err) {
+              // Message might already be deleted or bot lacks permission
+              failedCount++;
+              console.log(`Failed to delete message ${messageId}:`, err.message);
+              // Still clean up from database if the message doesn't exist anymore
+              if (err.code === 10008) { // Unknown Message error code
+                deleteBotMessageRecord(messageId);
+              }
+            }
+          }
+        }
 
         await interaction.editReply({
           content: `Purged ${deletedCount} bot message(s) from <#${channel.id}> (${timeframeText}).\n` +
