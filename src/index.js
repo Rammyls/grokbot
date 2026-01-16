@@ -17,6 +17,7 @@ import {
   listChannels,
   recordUserMessage,
   resetGuildMemory,
+  resetChannelMemory,
   setUserMemory,
   forgetUser,
   viewMemory,
@@ -133,6 +134,13 @@ const slashCommands = [
     .setName('memory-reset-guild')
     .setDescription('Reset memory for this guild')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+  new SlashCommandBuilder()
+    .setName('memory-reset-channel')
+    .setDescription('Reset memory for a specific channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addChannelOption((option) =>
+      option.setName('channel').setDescription('Channel to reset').setRequired(true)
+    ),
   new SlashCommandBuilder()
     .setName('memory-reset-user')
     .setDescription('Reset memory for a user')
@@ -646,6 +654,20 @@ client.on('interactionCreate', async (interaction) => {
       }
       resetGuildMemory(interaction.guildId);
       await interaction.reply({ content: 'Guild memory reset.' });
+    }
+
+    if (commandName === 'memory-reset-channel') {
+      if (!interaction.inGuild() && !isSuperAdmin) {
+        await interaction.reply({ content: 'Guilds only.', ephemeral: true });
+        return;
+      }
+      if (!hasAdminPerms) {
+        await interaction.reply({ content: 'Admin only.', ephemeral: true });
+        return;
+      }
+      const channel = interaction.options.getChannel('channel', true);
+      resetChannelMemory(channel.id);
+      await interaction.reply({ content: `Memory reset for <#${channel.id}>.` });
     }
 
     if (commandName === 'memory-reset-user') {

@@ -1,5 +1,27 @@
 import Database from 'better-sqlite3';
 
+/**
+ * Memory System Structure:
+ * 
+ * 1. USER MEMORY (per-user conversation & personality):
+ *    - user_settings: tracks memory on/off, profile summary, message counts
+ *    - user_messages: stores all messages from users (linked to channels/guilds)
+ *    - Used to learn about individual users' preferences, personality, history
+ * 
+ * 2. CHANNEL MEMORY (per-channel context):
+ *    - channel_profiles: tracks channel-level summaries and message counts
+ *    - Provides context about what's been discussed in a specific channel
+ * 
+ * 3. GUILD MEMORY (per-server context):
+ *    - guild_profiles: tracks server-level summaries and message counts
+ *    - guild_users: caches display names for mentioning users naturally
+ *    - Provides broader server context and known participants
+ * 
+ * 4. CHANNEL ALLOWLIST:
+ *    - channel_allowlist: controls which channels can record memory
+ *    - Admins use /memory-allow and /memory-deny to configure
+ */
+
 const db = new Database('data.db');
 
 db.exec(`
@@ -104,8 +126,23 @@ const isChannelAllowedStmt = db.prepare(
 const deleteUserMessagesStmt = db.prepare(
   'DELETE FROM user_messages WHERE user_id = ?'
 );
+const deleteChannelMessagesStmt = db.prepare(
+  'DELETE FROM user_messages WHERE channel_id = ?'
+);
 const deleteGuildMessagesStmt = db.prepare(
   'DELETE FROM user_messages WHERE guild_id = ?'
+);
+const deleteChannelProfileStmt = db.prepare(
+  'DELETE FROM channel_profiles WHERE channel_id = ?'
+);
+const deleteGuildChannelProfilesStmt = db.prepare(
+  'DELETE FROM channel_profiles WHERE guild_id = ?'
+);
+const deleteGuildProfileStmt = db.prepare(
+  'DELETE FROM guild_profiles WHERE guild_id = ?'
+);
+const deleteGuildUsersStmt = db.prepare(
+  'DELETE FROM guild_users WHERE guild_id = ?'
 );
 const recentMessagesStmt = db.prepare(
   'SELECT content FROM user_messages WHERE user_id = ? ORDER BY created_at DESC LIMIT ?'
@@ -201,6 +238,13 @@ export function setUserMemory(userId, enabled) {
   );
 }
 
+/**
+ * Reset a user's conversation memory and personality profile.
+ * This clears:
+ * - All messages recorded from the user (across all channels/guilds)
+ * - The user's profile summary (personality/preferences learned)
+ * Note: This does NOT disable memory for the user, only clears their history.
+ */
 export function forgetUser(userId) {
   deleteUserMessagesStmt.run(userId);
   const current = getUserSettings(userId);
@@ -212,8 +256,28 @@ export function viewMemory(userId) {
   return current.profile_summary || 'No profile summary yet.';
 }
 
+/**
+ * Reset all memory for a guild, including:
+ * - All user messages in the guild
+ * - Guild profile (summary and stats)
+ * - All channel profiles in the guild
+ * - Guild user cache (display names)
+ */
 export function resetGuildMemory(guildId) {
   deleteGuildMessagesStmt.run(guildId);
+  deleteGuildProfileStmt.run(guildId);
+  deleteGuildChannelProfilesStmt.run(guildId);
+  deleteGuildUsersStmt.run(guildId);
+}
+
+/**
+ * Reset memory for a specific channel, including:
+ * - All messages in the channel
+ * - Channel profile (summary and stats)
+ */
+export function resetChannelMemory(channelId) {
+  deleteChannelMessagesStmt.run(channelId);
+  deleteChannelProfileStmt.run(channelId);
 }
 
 export function allowChannel(channelId) {
