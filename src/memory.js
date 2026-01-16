@@ -70,6 +70,13 @@ db.exec(`
     last_seen_at INTEGER NOT NULL,
     PRIMARY KEY (guild_id, user_id)
   );
+
+  CREATE TABLE IF NOT EXISTS bot_messages (
+    message_id TEXT PRIMARY KEY,
+    channel_id TEXT NOT NULL,
+    guild_id TEXT,
+    created_at INTEGER NOT NULL
+  );
 `);
 
 function isDuplicateColumnError(error) {
@@ -255,6 +262,15 @@ const upsertGuildUserStmt = db.prepare(`
 `);
 const listGuildUsersStmt = db.prepare(
   "SELECT display_name FROM guild_users WHERE guild_id = ? AND last_seen_at > (strftime('%s', 'now') - 30 * 24 * 60 * 60) ORDER BY last_seen_at DESC LIMIT ?"
+);
+const insertBotMessageStmt = db.prepare(
+  'INSERT INTO bot_messages (message_id, channel_id, guild_id, created_at) VALUES (?, ?, ?, ?)'
+);
+const getBotMessagesInChannelStmt = db.prepare(
+  'SELECT message_id FROM bot_messages WHERE channel_id = ? AND guild_id = ? AND created_at >= ?'
+);
+const deleteBotMessageStmt = db.prepare(
+  'DELETE FROM bot_messages WHERE message_id = ?'
 );
 
 const SUMMARY_HINTS = [
@@ -480,4 +496,35 @@ export function getGuildUserNames(guildId, limit = 10) {
     .all(guildId, limit)
     .map((row) => row.display_name)
     .filter(Boolean);
+}
+
+/**
+ * Track a bot message in the database for future purge operations.
+ * @param {string} messageId - Discord message ID
+ * @param {string} channelId - Discord channel ID
+ * @param {string|null} guildId - Discord guild ID (null for DMs)
+ */
+export function trackBotMessage(messageId, channelId, guildId) {
+  insertBotMessageStmt.run(messageId, channelId, guildId || null, Date.now());
+}
+
+/**
+ * Get bot messages in a channel within a time period.
+ * @param {string} channelId - Discord channel ID
+ * @param {string} guildId - Discord guild ID
+ * @param {number} sinceTimestamp - Unix timestamp in milliseconds
+ * @returns {Array<string>} Array of message IDs
+ */
+export function getBotMessagesInChannel(channelId, guildId, sinceTimestamp) {
+  return getBotMessagesInChannelStmt
+    .all(channelId, guildId, sinceTimestamp)
+    .map((row) => row.message_id);
+}
+
+/**
+ * Delete a bot message record from the database.
+ * @param {string} messageId - Discord message ID
+ */
+export function deleteBotMessageRecord(messageId) {
+  deleteBotMessageStmt.run(messageId);
 }

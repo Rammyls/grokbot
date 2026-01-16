@@ -11,6 +11,7 @@ A production-ready Discord bot built with **discord.js v14** and Grok (OpenAI-co
 - Per-user cooldown and duplicate spam guard.
 - Message edit handling with re-runs (60s window, throttled).
 - Image support (attachments, embeds, and image URLs) with vision model routing.
+- Admin command to purge bot messages from channels with flexible timeframes.
 
 ## Setup
 
@@ -59,7 +60,14 @@ Replying to another message with an image also works:
 ### Slash command
 ```
 /ask question: whats good
+/ask question: whats good ghost:false   (visible to everyone)
+/ask question: whats good ghost:true    (visible only to you - default)
 ```
+
+The `ghost` parameter controls message visibility:
+- `ghost:true` (default) - Only you can see the bot's response (ephemeral message)
+- `ghost:false` - Everyone in the channel can see the bot's response
+
 
 ### Memory controls
 - `/memory on` — enable memory
@@ -68,12 +76,23 @@ Replying to another message with an image also works:
 - `/memory view` — view the stored summary
 - `/memory-reset-guild` — admin-only: wipe memory for this guild
 - `/memory-reset-user <user>` — admin-only: wipe memory for a user
+- `/memory-reset-channel <channel>` — admin-only: wipe memory for a specific channel
 
 ### Channel allowlist (guild admins)
 Memory starts disabled for all **guild channels**. In allowlisted guild channels, the bot passively records all messages from users who have memory enabled, regardless of whether the bot is mentioned or responds. This provides channel and server context for the bot. Use:
 - `/memory-allow <channel>`
 - `/memory-deny <channel>`
 - `/memory-list`
+
+### Message management (guild admins)
+- `/purge <timeframe> <channel>` — delete all bot messages in a channel within the specified timeframe (1h, 6h, 12h, 24h, 7d, 30d, or all time)
+
+### DM Support
+The bot works fully in DMs with the same memory and conversation features as in guilds:
+- Use `/ask` to interact with the bot (the `ghost` parameter has no effect in DMs)
+- Direct messages work without needing to mention the bot
+- Memory is enabled by default (can be toggled with `/memory on/off`)
+- All conversation history and preferences are preserved
 
 DMs are allowed for memory writes when the user has memory enabled.
 

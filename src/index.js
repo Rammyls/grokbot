@@ -26,6 +26,9 @@ import {
   getChannelSummary,
   getGuildSummary,
   getGuildUserNames,
+  trackBotMessage,
+  getBotMessagesInChannel,
+  deleteBotMessageRecord,
 } from './memory.js';
 import { getLLMResponse } from './llm.js';
 import { checkRateLimit } from './rateLimit.js';
@@ -42,6 +45,8 @@ const {
 } = process.env;
 
 const DISCORD_INTERACTION_EXPIRED_CODE = 10062;
+const DISCORD_UNKNOWN_MESSAGE_CODE = 10008;
+const DISCORD_BULK_DELETE_LIMIT = 100;
 
 function setupProcessGuards() {
   process.on('unhandledRejection', (reason) => {
@@ -127,6 +132,12 @@ const slashCommands = [
         .setName('question')
         .setDescription('What do you want to ask?')
         .setRequired(true)
+    )
+    .addBooleanOption((option) =>
+      option
+        .setName('ghost')
+        .setDescription('Make the response visible only to you (ghost message)')
+        .setRequired(false)
     ),
   new SlashCommandBuilder()
     .setName('memory')
@@ -176,6 +187,31 @@ const slashCommands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addUserOption((option) =>
       option.setName('user').setDescription('User to reset').setRequired(true)
+    ),
+  new SlashCommandBuilder()
+    .setName('purge')
+    .setDescription('Delete bot messages in a channel within a time period')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addStringOption((option) =>
+      option
+        .setName('timeframe')
+        .setDescription('Time period to purge messages from')
+        .setRequired(true)
+        .addChoices(
+          { name: '1 hour', value: '1h' },
+          { name: '6 hours', value: '6h' },
+          { name: '12 hours', value: '12h' },
+          { name: '24 hours', value: '24h' },
+          { name: '7 days', value: '7d' },
+          { name: '30 days', value: '30d' },
+          { name: 'All time', value: 'all' }
+        )
+    )
+    .addChannelOption((option) =>
+      option
+        .setName('channel')
+        .setDescription('Channel to purge messages from')
+        .setRequired(true)
     ),
 ].map((cmd) => cmd.toJSON());
 
@@ -475,6 +511,7 @@ client.on('messageCreate', async (message) => {
     const replyFn = async (text) => {
       const sent = await message.reply({ content: text });
       trackReply({ userMessageId: message.id, botReplyId: sent.id });
+      trackBotMessage(sent.id, message.channelId, message.guildId);
     };
     const typingFn = async () => {
       await message.channel.sendTyping();
@@ -575,6 +612,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (commandName === 'ask') {
       const question = interaction.options.getString('question', true);
+      const ghost = interaction.options.getBoolean('ghost') ?? true; // Default to true (ephemeral)
       const settings = getUserSettings(interaction.user.id);
       const memoryChannel = interaction.channel?.isDMBased?.()
         ? true
@@ -584,12 +622,17 @@ client.on('interactionCreate', async (interaction) => {
         interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
       const replyFn = async (text) => {
         try {
+          let reply;
           if (interaction.deferred) {
-            await interaction.editReply({ content: text });
+            reply = await interaction.editReply({ content: text });
           } else if (interaction.replied) {
-            await interaction.followUp({ content: text });
+            reply = await interaction.followUp({ content: text, ephemeral: ghost });
           } else {
-            await interaction.reply({ content: text });
+            reply = await interaction.reply({ content: text, ephemeral: ghost });
+          }
+          // Track bot message for purge functionality (only track non-ephemeral messages)
+          if (reply?.id && !ghost) {
+            trackBotMessage(reply.id, interaction.channelId, interaction.guildId);
           }
         } catch (err) {
           if (err.code === DISCORD_INTERACTION_EXPIRED_CODE) {
@@ -602,7 +645,7 @@ client.on('interactionCreate', async (interaction) => {
       const typingFn = async () => {
         try {
           if (!interaction.deferred && !interaction.replied) {
-            await interaction.deferReply();
+            await interaction.deferReply({ ephemeral: ghost });
           }
         } catch (err) {
           if (err.code === DISCORD_INTERACTION_EXPIRED_CODE) {
@@ -760,6 +803,130 @@ client.on('interactionCreate', async (interaction) => {
       } catch (dmErr) {
         // User may have DMs disabled or blocked the bot, which is fine
         console.log(`Could not send DM to user ${user.username} about memory reset:`, dmErr.message);
+      }
+    }
+
+    if (commandName === 'purge') {
+      if (!interaction.inGuild() && !isSuperAdmin) {
+        await interaction.reply({ content: 'Guilds only.', ephemeral: true });
+        return;
+      }
+      if (!hasAdminPerms) {
+        await interaction.reply({ content: 'Admin only.', ephemeral: true });
+        return;
+      }
+
+      const timeframe = interaction.options.getString('timeframe', true);
+      const channel = interaction.options.getChannel('channel', true);
+
+      // Defer reply since this could take a while
+      await interaction.deferReply({ ephemeral: true });
+
+      // Calculate timestamp based on timeframe
+      let sinceTimestamp;
+      const now = Date.now();
+      switch (timeframe) {
+        case '1h':
+          sinceTimestamp = now - (1 * 60 * 60 * 1000);
+          break;
+        case '6h':
+          sinceTimestamp = now - (6 * 60 * 60 * 1000);
+          break;
+        case '12h':
+          sinceTimestamp = now - (12 * 60 * 60 * 1000);
+          break;
+        case '24h':
+          sinceTimestamp = now - (24 * 60 * 60 * 1000);
+          break;
+        case '7d':
+          sinceTimestamp = now - (7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          sinceTimestamp = now - (30 * 24 * 60 * 60 * 1000);
+          break;
+        case 'all':
+          sinceTimestamp = 0;
+          break;
+        default:
+          sinceTimestamp = 0;
+      }
+
+      try {
+        // Get bot messages from database
+        const messageIds = getBotMessagesInChannel(channel.id, interaction.guildId, sinceTimestamp);
+        
+        if (messageIds.length === 0) {
+          await interaction.editReply({ 
+            content: `No bot messages found in <#${channel.id}> within the specified timeframe.` 
+          });
+          return;
+        }
+
+        let deletedCount = 0;
+        let failedCount = 0;
+
+        // Helper to get human-readable timeframe text
+        const timeframeLabels = {
+          '1h': '1 hour',
+          '6h': '6 hours',
+          '12h': '12 hours',
+          '24h': '24 hours',
+          '7d': '7 days',
+          '30d': '30 days',
+          'all': 'all time'
+        };
+        const timeframeText = timeframeLabels[timeframe] || timeframe;
+
+        // Try bulk delete for messages less than 14 days old
+        const fourteenDaysAgo = Date.now() - (14 * 24 * 60 * 60 * 1000);
+        const canUseBulkDelete = sinceTimestamp >= fourteenDaysAgo && messageIds.length >= 2;
+        let bulkDeleteSucceeded = false;
+
+        if (canUseBulkDelete && messageIds.length <= DISCORD_BULK_DELETE_LIMIT) {
+          // Use bulk delete API (max 100 messages at a time)
+          try {
+            await channel.bulkDelete(messageIds, true);
+            deletedCount = messageIds.length;
+            bulkDeleteSucceeded = true;
+            // Clean up database records for successfully deleted messages
+            for (const messageId of messageIds) {
+              deleteBotMessageRecord(messageId);
+            }
+          } catch (err) {
+            console.log('Bulk delete failed, falling back to individual deletion:', err.message);
+          }
+        }
+
+        // Individual deletion for messages older than 14 days or when bulk delete fails
+        if (!bulkDeleteSucceeded) {
+          for (const messageId of messageIds) {
+            try {
+              const msg = await channel.messages.fetch(messageId);
+              await msg.delete();
+              deletedCount++;
+              // Only delete from database if Discord deletion succeeded
+              deleteBotMessageRecord(messageId);
+            } catch (err) {
+              // Message might already be deleted or bot lacks permission
+              failedCount++;
+              console.log(`Failed to delete message ${messageId}:`, err.message);
+              // Still clean up from database if the message doesn't exist anymore
+              if (err.code === DISCORD_UNKNOWN_MESSAGE_CODE) {
+                deleteBotMessageRecord(messageId);
+              }
+            }
+          }
+        }
+
+        await interaction.editReply({
+          content: `Purged ${deletedCount} bot message(s) from <#${channel.id}> (${timeframeText}).\n` +
+                   (failedCount > 0 ? `${failedCount} message(s) could not be deleted (already removed or no permission).` : '')
+        });
+      } catch (err) {
+        console.error('Error during purge:', err);
+        await interaction.editReply({
+          content: 'An error occurred while purging messages. Please check bot permissions and try again.'
+        });
       }
     }
   });
