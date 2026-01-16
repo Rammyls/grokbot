@@ -40,6 +40,8 @@ const {
   SUPER_ADMIN_USER_ID,
 } = process.env;
 
+const DISCORD_INTERACTION_EXPIRED_CODE = 10062;
+
 function setupProcessGuards() {
   process.on('unhandledRejection', (reason) => {
     console.error('Unhandled rejection:', reason);
@@ -521,17 +523,33 @@ client.on('interactionCreate', async (interaction) => {
       const displayName =
         interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
       const replyFn = async (text) => {
-        if (interaction.deferred) {
-          await interaction.editReply({ content: text });
-        } else if (interaction.replied) {
-          await interaction.followUp({ content: text });
-        } else {
-          await interaction.reply({ content: text });
+        try {
+          if (interaction.deferred) {
+            await interaction.editReply({ content: text });
+          } else if (interaction.replied) {
+            await interaction.followUp({ content: text });
+          } else {
+            await interaction.reply({ content: text });
+          }
+        } catch (err) {
+          if (err.code === DISCORD_INTERACTION_EXPIRED_CODE) {
+            console.error('Failed to send reply: Interaction expired before response could be sent');
+          } else {
+            throw err;
+          }
         }
       };
       const typingFn = async () => {
-        if (!interaction.deferred && !interaction.replied) {
-          await interaction.deferReply();
+        try {
+          if (!interaction.deferred && !interaction.replied) {
+            await interaction.deferReply();
+          }
+        } catch (err) {
+          if (err.code === DISCORD_INTERACTION_EXPIRED_CODE) {
+            console.error('Failed to defer reply: Interaction expired before deferReply could be called');
+          } else {
+            throw err;
+          }
         }
       };
 
