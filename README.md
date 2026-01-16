@@ -11,6 +11,7 @@ A production-ready Discord bot built with **discord.js v14** and Grok (OpenAI-co
 - Per-user cooldown and duplicate spam guard.
 - Message edit handling with re-runs (60s window, throttled).
 - Image support (attachments, embeds, and image URLs) with vision model routing.
+- Admin command to purge bot messages from channels with flexible timeframes.
 
 ## Setup
 
