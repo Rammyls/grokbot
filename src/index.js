@@ -270,7 +270,7 @@ function isPrivateIp(address) {
     // Check for unique local addresses (fc00::/7 range)
     if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
     // Check for link-local addresses (fe80::/10 range)
-    if (lower.startsWith('fe80:') || lower.startsWith('fe80')) return true;
+    if (lower.startsWith('fe80')) return true;
   }
   return false;
 }
@@ -404,13 +404,15 @@ async function handlePrompt({
       if (dataUrl) imageInputs.push(dataUrl);
     }
   }
-  const effectivePrompt =
-    prompt ||
-    (imageInputs.length > 0
-      ? 'User sent an image.'
-      : replyContextText
-      ? 'Following up on the replied message.'
-      : '');
+  
+  // Determine effective prompt for the LLM
+  let effectivePrompt = prompt;
+  if (!effectivePrompt && imageInputs.length > 0) {
+    effectivePrompt = 'User sent an image.';
+  } else if (!effectivePrompt && replyContextText) {
+    effectivePrompt = 'Following up on the replied message.';
+  }
+  
   const recentTurns = allowMemory
     ? addTurn(userId, 'user', effectivePrompt || '...')
     : [];

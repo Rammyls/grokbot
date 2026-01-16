@@ -23,6 +23,7 @@ import Database from 'better-sqlite3';
  */
 
 const db = new Database('data.db');
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS user_settings (
@@ -375,9 +376,9 @@ export const recordUserMessage = db.transaction(({ userId, channelId, guildId, c
   const current = getUserSettings(userId);
   const nextCount = (current.message_count || 0) + 1;
   const timeSinceLastSummary = Date.now() - (current.last_summary_at || 0);
-  const summaryDue =
-    (notes.length > 0 && nextCount % 20 === 0) || timeSinceLastSummary > 24 * 60 * 60 * 1000;
-  const updatedSummary = summaryDue && (notes.length > 0 || timeSinceLastSummary > 24 * 60 * 60 * 1000)
+  const shouldUpdateSummary = notes.length > 0 || timeSinceLastSummary > TWENTY_FOUR_HOURS_MS;
+  const summaryDue = (notes.length > 0 && nextCount % 20 === 0) || timeSinceLastSummary > TWENTY_FOUR_HOURS_MS;
+  const updatedSummary = summaryDue && shouldUpdateSummary
     ? normalizeSummary(current.profile_summary || '', notes)
     : current.profile_summary || '';
   const updatedLastSummaryAt = summaryDue ? Date.now() : current.last_summary_at || 0;
@@ -404,10 +405,11 @@ export const recordUserMessage = db.transaction(({ userId, channelId, guildId, c
       };
     const channelCount = (channelProfile.message_count || 0) + 1;
     const channelTimeSinceLastSummary = Date.now() - (channelProfile.last_summary_at || 0);
+    const channelShouldUpdateSummary = notes.length > 0 || channelTimeSinceLastSummary > TWENTY_FOUR_HOURS_MS;
     const channelSummaryDue =
       (notes.length > 0 && channelCount % 20 === 0) ||
-      channelTimeSinceLastSummary > 24 * 60 * 60 * 1000;
-    const channelSummary = channelSummaryDue && (notes.length > 0 || channelTimeSinceLastSummary > 24 * 60 * 60 * 1000)
+      channelTimeSinceLastSummary > TWENTY_FOUR_HOURS_MS;
+    const channelSummary = channelSummaryDue && channelShouldUpdateSummary
       ? normalizeSummary(channelProfile.summary || '', notes)
       : channelProfile.summary || '';
     const channelLastSummaryAt = channelSummaryDue
@@ -432,10 +434,11 @@ export const recordUserMessage = db.transaction(({ userId, channelId, guildId, c
       };
     const guildCount = (guildProfile.message_count || 0) + 1;
     const guildTimeSinceLastSummary = Date.now() - (guildProfile.last_summary_at || 0);
+    const guildShouldUpdateSummary = notes.length > 0 || guildTimeSinceLastSummary > TWENTY_FOUR_HOURS_MS;
     const guildSummaryDue =
       (notes.length > 0 && guildCount % 30 === 0) ||
-      guildTimeSinceLastSummary > 24 * 60 * 60 * 1000;
-    const guildSummary = guildSummaryDue && (notes.length > 0 || guildTimeSinceLastSummary > 24 * 60 * 60 * 1000)
+      guildTimeSinceLastSummary > TWENTY_FOUR_HOURS_MS;
+    const guildSummary = guildSummaryDue && guildShouldUpdateSummary
       ? normalizeSummary(guildProfile.summary || '', notes)
       : guildProfile.summary || '';
     const guildLastSummaryAt = guildSummaryDue
