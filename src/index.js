@@ -880,6 +880,7 @@ client.on('interactionCreate', async (interaction) => {
       isSuperAdmin || interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
 
     if (commandName === 'ask') {
+      const question = interaction.options.getString('question', true);
       const isDM = interaction.channel?.isDMBased?.();
       const ghost = !isDM && (interaction.options.getBoolean('ghost') ?? true);
       const ghost = interaction.options.getBoolean('ghost') ?? true; // Default to true (ephemeral)
