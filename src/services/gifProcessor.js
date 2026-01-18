@@ -94,21 +94,52 @@ export async function gifToPngSequence(gifUrl, options = {}) {
 }
 
 async function downloadGif(url, dest) {
+  const isDiscordCdn = url.includes('media.discordapp.net') || url.includes('cdn.discordapp.com');
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+  };
+
+  let res;
   try {
-    const response = await fetch(url, {
-      timeout: 15000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch GIF: ${response.statusText}`);
-    }
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-    fs.writeFileSync(dest, buffer);
+    res = await fetch(url, { headers, redirect: 'follow', signal: AbortSignal.timeout(15000) });
   } catch (err) {
-    throw new Error(`GIF download failed: ${err.message}`);
+    throw new Error(`Failed to fetch GIF: ${err.message} (URL: ${url})`);
   }
+
+  if (!res.ok) {
+    // If the initial URL isn't a direct gif, try to parse HTML for a .gif link (Tenor pages etc.)
+    const text = await res.text().catch(() => '');
+    const metaMatch = text.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+\.gif)/i);
+    const gifMatch = text.match(/(https?:\/\/[^'"]+\.gif)/i);
+    const fallback = metaMatch?.[1] || gifMatch?.[1];
+    if (!fallback) {
+      throw new Error(`Failed to fetch GIF: ${res.status} ${res.statusText} (URL: ${url})`);
+    }
+    const retry = await fetch(fallback, { headers, redirect: 'follow', signal: AbortSignal.timeout(15000) });
+    if (!retry.ok) {
+      throw new Error(`Failed to fetch GIF: ${retry.status} ${retry.statusText} (fallback URL: ${fallback})`);
+    }
+    await fs.promises.writeFile(dest, Buffer.from(await retry.arrayBuffer()));
+    return;
+  }
+
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('gif') && !contentType.includes('image')) {
+    // HTML (or other) response: try to find a gif URL in the body
+    const text = await res.text().catch(() => '');
+    const metaMatch = text.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+\.gif)/i);
+    const gifMatch = text.match(/(https?:\/\/[^'"]+\.gif)/i);
+    const fallback = metaMatch?.[1] || gifMatch?.[1];
+    if (!fallback) {
+      throw new Error(`Failed to fetch GIF: Not a GIF response (content-type: ${contentType}, URL: ${url})`);
+    }
+    const retry = await fetch(fallback, { headers, redirect: 'follow', signal: AbortSignal.timeout(15000) });
+    if (!retry.ok) {
+      throw new Error(`Failed to fetch GIF: ${retry.status} ${retry.statusText} (fallback URL: ${fallback})`);
+    }
+    await fs.promises.writeFile(dest, Buffer.from(await retry.arrayBuffer()));
+    return;
+  }
+
+  await fs.promises.writeFile(dest, Buffer.from(await res.arrayBuffer()));
 }
