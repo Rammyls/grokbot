@@ -4,6 +4,7 @@ import {
   executePollCommand,
   executeGifCommand,
   executeMemoryCommand,
+  executeLobotomizeCommand,
   executeMemoryAllowCommand,
   executeMemoryDenyCommand,
   executeMemoryListCommand,
@@ -67,6 +68,8 @@ export async function handleInteraction(interaction, { inMemoryTurns, pollTimers
         return await executePurgeCommand(interaction);
       case 'serverinfo':
         return await executeServerInfoCommand(interaction);
+      case 'lobotomize':
+        return await executeLobotomizeCommand(interaction);
       case 'mydata':
         return await executeMyDataCommand(interaction);
       default:

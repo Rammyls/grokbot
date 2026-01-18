@@ -77,8 +77,8 @@ The `ghost` parameter controls message visibility:
 ### Memory controls
 - `/memory on` — enable memory
 - `/memory off` — disable memory
-- `/memory forget` — wipe stored history
 - `/memory view` — view the stored summary
+- `/lobotomize` — wipe stored history
 - `/memory-reset-guild` — admin-only: wipe memory for this guild
 - `/memory-reset-user <user>` — admin-only: wipe memory for a user
 - `/memory-reset-channel <channel>` — admin-only: wipe memory for a specific channel

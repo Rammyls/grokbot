@@ -198,14 +198,15 @@ export async function executeMemoryCommand(interaction) {
     setUserMemory(interaction.user.id, false);
     await interaction.reply({ content: 'Memory is off.' });
   }
-  if (sub === 'forget') {
-    forgetUser(interaction.user.id);
-    await interaction.reply({ content: 'Memory wiped.' });
-  }
   if (sub === 'view') {
     const summary = viewMemory(interaction.user.id);
     await interaction.reply({ content: summary });
   }
+}
+
+export async function executeLobotomizeCommand(interaction) {
+  forgetUser(interaction.user.id);
+  await interaction.reply({ content: 'Memory wiped.' });
 }
 
 export async function executeMemoryAllowCommand(interaction) {
@@ -411,7 +412,7 @@ export async function executeMyDataCommand(interaction) {
     info += recentMessages.map(m => `• ${m.substring(0, 60)}${m.length > 60 ? '...' : ''}`).join('\n');
   }
   
-  info += `\n\nUse \`/memory forget\` to clear all your data.`;
+  info += `\n\nUse \`/lobotomize\` to clear all your data.`;
   
   await interaction.reply({ content: info, ephemeral: true });
 }

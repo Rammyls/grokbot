@@ -66,7 +66,6 @@ export const memoryCommand = {
     .setDescription('Manage your memory preferences')
     .addSubcommand((sub) => sub.setName('on').setDescription('Enable memory'))
     .addSubcommand((sub) => sub.setName('off').setDescription('Disable memory'))
-    .addSubcommand((sub) => sub.setName('forget').setDescription('Forget your history'))
     .addSubcommand((sub) => sub.setName('view').setDescription('View stored summary')),
 };
 
@@ -130,6 +129,12 @@ export const memoryResetUserCommand = {
     ),
 };
 
+export const lobotomizeCommand = {
+  data: new SlashCommandBuilder()
+    .setName('lobotomize')
+    .setDescription('Lobotomize yourself (forget all history)'),
+};
+
 export const purgeCommand = {
   data: new SlashCommandBuilder()
     .setName('purge')
@@ -181,6 +186,7 @@ export const commands = [
   memoryResetGuildCommand,
   memoryResetChannelCommand,
   memoryResetUserCommand,
+  lobotomizeCommand,
   purgeCommand,
   serverInfoCommand,
   myDataCommand,
