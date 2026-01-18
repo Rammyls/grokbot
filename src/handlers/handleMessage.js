@@ -5,6 +5,7 @@ import { getMessageImageUrls, getMessageVideoUrls, stripMention, parseQuotedPoll
 import { NUMBER_EMOJIS } from '../utils/constants.js';
 import { createPoll, getPollByMessageId, recordVote, removeVote } from '../polls.js';
 import { getReplyContext, processGifUrl } from '../services/media.js';
+import { routeIntent } from '../services/intentRouter.js';
 
 export async function handleMessage({ client, message, inMemoryTurns }) {
   if (message.author.bot) return;
@@ -29,6 +30,19 @@ export async function handleMessage({ client, message, inMemoryTurns }) {
   if (!isDirect && !mentioned) return;
 
   const content = isDirect ? message.content.trim() : stripMention(message.content, client.user.id);
+  
+  // Try to route simple cache-backed intents (owner, find user, role members, random)
+  if (content && message.guildId) {
+    const intentReply = await routeIntent(content, {
+      guildId: message.guildId,
+      userId: message.author.id,
+      client,
+    });
+    if (intentReply) {
+      await message.reply({ content: intentReply });
+      return;
+    }
+  }
   
   // Inline poll creation
   if (mentioned) {

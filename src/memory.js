@@ -357,6 +357,22 @@ const getMemberRolesStmt = db.prepare(
   'SELECT role_id FROM member_roles WHERE guild_id = ? AND user_id = ?'
 );
 
+// List members for a given role (with display names)
+const listRoleMembersStmt = db.prepare(`
+  SELECT gu.display_name, mr.user_id
+  FROM member_roles mr
+  LEFT JOIN guild_users gu
+    ON mr.guild_id = gu.guild_id AND mr.user_id = gu.user_id
+  WHERE mr.guild_id = ? AND mr.role_id = ?
+  ORDER BY gu.display_name ASC
+  LIMIT ?
+`);
+
+// Count members in a given role
+const countRoleMembersStmt = db.prepare(
+  'SELECT COUNT(*) AS cnt FROM member_roles WHERE guild_id = ? AND role_id = ?'
+);
+
 const upsertGuildMetadataStmt = db.prepare(`
   INSERT INTO guild_metadata (guild_id, name, owner_id, member_count, created_at, updated_at)
   VALUES (?, ?, ?, ?, ?, ?)
@@ -705,6 +721,17 @@ export function getMemberRoles(guildId, userId) {
   return getMemberRolesStmt.all(guildId, userId).map(r => r.role_id);
 }
 
+export function getRoleMemberNames(guildId, roleId, limit = 8) {
+  return listRoleMembersStmt
+    .all(guildId, roleId, limit)
+    .map(r => r.display_name || `User${String(r.user_id).slice(-4)}`);
+}
+
+export function getRoleMemberCount(guildId, roleId) {
+  const row = countRoleMembersStmt.get(guildId, roleId);
+  return row?.cnt || 0;
+}
+
 // ===== USER MANAGEMENT =====
 
 export function upsertGuildUser({ guildId, userId, displayName, joinedAt }) {
@@ -732,11 +759,26 @@ export function getServerContext(guildId) {
   if (metadata) {
     context += `Server: ${metadata.name || 'Unknown'}\n`;
     context += `Members: ${metadata.member_count || 0}\n`;
+    if (metadata.owner_id) {
+      const owner = getGuildUser(guildId, metadata.owner_id);
+      if (owner) {
+        context += `Owner: ${owner.display_name} (${metadata.owner_id})\n`;
+      }
+    }
   }
   
   if (roles.length > 0) {
     const topRoles = roles.slice(0, 8).map(r => r.role_name).join(', ');
     context += `Roles: ${topRoles}\n`;
+
+    // Include member counts and sample names for the top few roles
+    const sampleRoles = roles.slice(0, 3);
+    for (const role of sampleRoles) {
+      const count = getRoleMemberCount(guildId, role.role_id);
+      const names = getRoleMemberNames(guildId, role.role_id, 6);
+      const namesStr = names.join(', ');
+      context += `Role ${role.role_name}: ${count} members${namesStr ? ` (e.g., ${namesStr})` : ''}\n`;
+    }
   }
   
   if (recentUsers.length > 0) {
