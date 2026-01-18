@@ -82,7 +82,7 @@ export async function handleMessage({ client, message, inMemoryTurns }) {
 
   const replyFn = async (text) => {
     const sent = await message.reply({ content: text });
-    trackReply({ userMessageId: message.id, botReplyId: sent.id });
+    trackReplySync({ userMessageId: message.id, botReplyId: sent.id });
     trackBotMessage(sent.id, message.channelId, message.guildId);
   };
   const typingFn = async () => {
