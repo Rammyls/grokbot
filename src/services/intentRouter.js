@@ -37,9 +37,17 @@ function fuzzyScore(search, target) {
 }
 
 /**
- * Find a role by name (case-insensitive, fuzzy)
+ * Lookup user ID by display name
  */
-function findRoleByName(roles, roleName) {
+export function getUserIdByName(guildId, displayName) {
+  const allUsers = getGuildUserNames(guildId, 500) || [];
+  const norm = normalize(displayName);
+  const match = allUsers.find((name) => normalize(name) === norm);
+  if (!match) return null;
+  // Since we only have names, we need to search the guild_users table directly
+  // For now, return the name as placeholder; caller must handle
+  return match;
+}
   if (!roleName) return null;
   const norm = normalize(roleName);
 
@@ -93,8 +101,44 @@ export async function routeIntent(prompt, { guildId, userId, client }) {
 
   const lower = prompt.toLowerCase().trim();
 
+  // PING intent: "ping X people", "ping random", "ping someone", etc.
+  const pingMatch = lower.match(/^ping\s+(?:(\d+)\s+)?(?:random\s+)?(?:people|person|users?|members?)?$/i);
+  if (pingMatch) {
+    const count = parseInt(pingMatch[1], 10) || 1;
+    const recentUsers = getGuildUserNames(guildId, 150) || [];
+    if (recentUsers.length === 0) return null;
+
+    // Pick N random users without replacement
+    const picked = [];
+    const available = [...recentUsers];
+    for (let i = 0; i < Math.min(count, available.length); i++) {
+      const idx = Math.floor(Math.random() * available.length);
+      picked.push(available[idx]);
+      available.splice(idx, 1);
+    }
+
+    // For each picked name, we need to get their user ID for mentioning
+    // Since the memory API returns display names but we need IDs, use client to resolve
+    const mentions = [];
+    for (const name of picked) {
+      // Try to find by username or display name via guild members
+      try {
+        const members = await client.guilds.cache.get(guildId)?.members.search({ query: name });
+        if (members?.first()) {
+          mentions.push(`<@${members.first().user.id}>`);
+        } else {
+          mentions.push(`**${name}**`);
+        }
+      } catch {
+        mentions.push(`**${name}**`);
+      }
+    }
+
+    return `\ud83c\udfb2 Pinged: ${mentions.join(' ')}`;
+  }
+
   // OWNER intent: "who is the owner", "server owner", "owner", etc.
-  if (/^(who is the )?owner\?*$/.test(lower) || /owner/.test(lower)) {
+  if (/^(who is the )?owner\??$/.test(lower) || /^owner$/.test(lower)) {
     const metadata = getGuildMetadata(guildId);
     if (metadata?.owner_id) {
       const owner = getGuildUser(guildId, metadata.owner_id);
@@ -112,8 +156,6 @@ export async function routeIntent(prompt, { guildId, userId, client }) {
     const userName = findUserMatch[1]?.trim();
     if (userName && userName.length > 1) {
       const allUsers = getGuildUserNames(guildId, 100) || [];
-      // Reconstruct full user objects (we only have names, so search by name)
-      // For now, return a simple match from the list
       const matches = allUsers.filter((name) =>
         normalize(name).includes(normalize(userName))
       );
@@ -144,19 +186,12 @@ export async function routeIntent(prompt, { guildId, userId, client }) {
     return null;
   }
 
-  // RANDOM MEMBER intent: "ping random", "random member", "pick someone", etc.
-  if (
-    /random|pick someone|who should i|choose someone/i.test(lower)
-  ) {
+  // RANDOM MEMBER intent: "random", "pick someone", "who should i", etc. (but NOT "ping")
+  if (/^(?:random|who should i|choose someone|pick someone)\??$/i.test(lower)) {
     const recentUsers = getGuildUserNames(guildId, 50) || [];
     if (recentUsers.length > 0) {
       const chosen = recentUsers[Math.floor(Math.random() * recentUsers.length)];
-      // Find the user object to get their ID for mentioning
-      const user = getGuildUser(guildId, chosen);
-      if (user?.user_id) {
-        return `🎲 Picked: <@${user.user_id}> (**${chosen}**)`;
-      }
-      return `🎲 Picked: **${chosen}**`;
+      return `\ud83c\udfb2 Picked: **${chosen}**`;
     }
     return null;
   }

@@ -29,6 +29,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS user_settings (
     user_id TEXT PRIMARY KEY,
     memory_enabled INTEGER DEFAULT 1,
+    autoreply_enabled INTEGER DEFAULT 0,
     profile_summary TEXT DEFAULT '',
     message_count INTEGER DEFAULT 0,
     last_summary_at INTEGER DEFAULT 0
@@ -426,6 +427,7 @@ export function getUserSettings(userId) {
     return {
       user_id: userId,
       memory_enabled: 1,
+      autoreply_enabled: 0,
       profile_summary: '',
       message_count: 0,
       last_summary_at: 0,
@@ -438,6 +440,19 @@ export function setUserMemory(userId, enabled) {
   const current = getUserSettings(userId);
   upsertSettingsStmt.run(
     userId,
+    enabled ? 1 : 0,
+    current.autoreply_enabled || 0,
+    current.profile_summary || '',
+    current.message_count || 0,
+    current.last_summary_at || 0
+  );
+}
+
+export function setUserAutoreply(userId, enabled) {
+  const current = getUserSettings(userId);
+  upsertSettingsStmt.run(
+    userId,
+    current.memory_enabled || 1,
     enabled ? 1 : 0,
     current.profile_summary || '',
     current.message_count || 0,

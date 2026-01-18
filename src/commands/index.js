@@ -185,6 +185,22 @@ export const myDataCommand = {
     .setDescription('View what the bot knows about you'),
 };
 
+export const autoreplyCommand = {
+  data: new SlashCommandBuilder()
+    .setName('autoreply')
+    .setDescription('Toggle auto-reply mode (respond without mention)')
+    .addStringOption((option) =>
+      option
+        .setName('mode')
+        .setDescription('Enable or disable auto-reply')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Enable', value: 'on' },
+          { name: 'Disable', value: 'off' }
+        )
+    ),
+};
+
 export const commands = [
   askCommand,
   pollCommand,
@@ -200,4 +216,5 @@ export const commands = [
   purgeCommand,
   serverInfoCommand,
   myDataCommand,
+  autoreplyCommand,
 ];

@@ -14,6 +14,7 @@ import {
   executePurgeCommand,
   executeServerInfoCommand,
   executeMyDataCommand,
+  executeAutoreplyCommand,
 } from '../commands/handlers.js';
 
 export async function handleInteraction(interaction, { inMemoryTurns, pollTimers, client, superAdminId }) {
@@ -72,6 +73,8 @@ export async function handleInteraction(interaction, { inMemoryTurns, pollTimers
         return await executeLobotomizeCommand(interaction);
       case 'mydata':
         return await executeMyDataCommand(interaction);
+      case 'autoreply':
+        return await executeAutoreplyCommand(interaction);
       default:
         await interaction.reply({ content: 'Unknown command.', ephemeral: true });
     }

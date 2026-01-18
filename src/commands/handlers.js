@@ -4,6 +4,7 @@ import {
   isChannelAllowed,
   recordUserMessage,
   setUserMemory,
+  setUserAutoreply,
   forgetUser,
   viewMemory,
   getProfileSummary,
@@ -437,4 +438,14 @@ export async function executeMyDataCommand(interaction) {
   info += `\n\nUse \`/lobotomize\` to clear all your data.`;
   
   await interaction.reply({ content: info, ephemeral: true });
+}
+
+export async function executeAutoreplyCommand(interaction) {
+  const mode = interaction.options.getString('mode', true);
+  const enabled = mode === 'on';
+  
+  setUserAutoreply(interaction.user.id, enabled);
+  
+  const status = enabled ? '✅ Auto-reply **enabled**. I\'ll respond to all your messages in this guild.' : '❌ Auto-reply **disabled**. You\'ll need to mention me.';
+  await interaction.reply({ content: status, ephemeral: true });
 }

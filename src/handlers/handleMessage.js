@@ -27,9 +27,12 @@ export async function handleMessage({ client, message, inMemoryTurns }) {
   }
 
   const mentioned = message.mentions.has(client.user);
-  if (!isDirect && !mentioned) return;
+  const autoreplyEnabled = settings.autoreply_enabled && message.guildId;
+  
+  // Only process if: DM, mentioned, or autoreply enabled
+  if (!isDirect && !mentioned && !autoreplyEnabled) return;
 
-  const content = isDirect ? message.content.trim() : stripMention(message.content, client.user.id);
+  const content = isDirect ? message.content.trim() : mentioned ? stripMention(message.content, client.user.id) : message.content.trim();
   
   // Try to route simple cache-backed intents (owner, find user, role members, random)
   if (content && message.guildId) {
