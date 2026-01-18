@@ -132,7 +132,17 @@ export const memoryResetUserCommand = {
 export const lobotomizeCommand = {
   data: new SlashCommandBuilder()
     .setName('lobotomize')
-    .setDescription('Lobotomize yourself (forget all history)'),
+    .setDescription('Lobotomize yourself or everyone (forget all history)')
+    .addStringOption((option) =>
+      option
+        .setName('scope')
+        .setDescription('Who to lobotomize (default: just you)')
+        .setRequired(false)
+        .addChoices(
+          { name: 'Just me', value: 'me' },
+          { name: 'Everyone (admin only)', value: 'all' }
+        )
+    ),
 };
 
 export const purgeCommand = {

@@ -263,11 +263,16 @@ const deleteGuildUsersStmt = db.prepare(
   'DELETE FROM guild_users WHERE guild_id = ?'
 );
 const recentMessagesStmt = db.prepare(
-  'SELECT content FROM user_messages WHERE user_id = ? ORDER BY created_at DESC LIMIT ?'
+  'SELECT content, created_at FROM user_messages WHERE user_id = ? ORDER BY created_at DESC LIMIT ?'
 );
-const recentChannelMessagesStmt = db.prepare(
-  'SELECT content FROM user_messages WHERE channel_id = ? AND user_id != ? ORDER BY created_at DESC LIMIT ?'
-);
+const recentChannelMessagesStmt = db.prepare(`
+  SELECT um.content, um.user_id, um.created_at, gu.display_name
+  FROM user_messages um
+  LEFT JOIN guild_users gu ON um.guild_id = gu.guild_id AND um.user_id = gu.user_id
+  WHERE um.channel_id = ? AND um.user_id != ?
+  ORDER BY um.created_at DESC
+  LIMIT ?
+`);
 const getChannelProfileStmt = db.prepare(
   'SELECT channel_id, guild_id, summary, message_count, last_summary_at FROM channel_profiles WHERE channel_id = ?'
 );
@@ -569,14 +574,33 @@ export function getProfileSummary(userId) {
 export function getRecentMessages(userId, limit = 4) {
   return recentMessagesStmt
     .all(userId, limit)
-    .map((row) => row.content)
+    .map((row) => {
+      const timestamp = new Date(row.created_at).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      return `[${timestamp}] ${row.content}`;
+    })
     .filter(Boolean);
 }
 
 export function getRecentChannelMessages(channelId, excludeUserId, limit = 4) {
   return recentChannelMessagesStmt
     .all(channelId, excludeUserId, limit)
-    .map((row) => row.content)
+    .map((row) => {
+      const name = row.display_name || `User${row.user_id.slice(-4)}`;
+      const timestamp = new Date(row.created_at).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      return `[${timestamp}] @${name}: ${row.content}`;
+    })
     .filter(Boolean);
 }
 

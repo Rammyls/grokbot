@@ -205,8 +205,30 @@ export async function executeMemoryCommand(interaction) {
 }
 
 export async function executeLobotomizeCommand(interaction) {
-  forgetUser(interaction.user.id);
-  await interaction.reply({ content: 'Memory wiped.' });
+  const scope = interaction.options.getString('scope') || 'me';
+  
+  if (scope === 'all') {
+    const isSuperAdmin = interaction.user.id === process.env.SUPER_ADMIN_USER_ID;
+    const hasAdminPerms = interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
+    
+    if (!isSuperAdmin && !hasAdminPerms) {
+      await interaction.reply({ content: 'Admin only.', ephemeral: true });
+      return;
+    }
+    
+    // Wipe everything
+    const { db } = await import('../memory.js');
+    db.exec(`
+      DELETE FROM user_messages;
+      DELETE FROM user_settings;
+      DELETE FROM channel_profiles;
+      DELETE FROM guild_profiles;
+    `);
+    await interaction.reply({ content: '🧠💥 **TOTAL LOBOTOMY COMPLETE** - All memory wiped across all users, channels, and guilds.' });
+  } else {
+    forgetUser(interaction.user.id);
+    await interaction.reply({ content: 'Your memory has been wiped.' });
+  }
 }
 
 export async function executeMemoryAllowCommand(interaction) {
