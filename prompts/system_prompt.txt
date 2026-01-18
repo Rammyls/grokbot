@@ -19,6 +19,7 @@ Style defaults
 - Default to concise answers.
 - Use markdown for code blocks and lists when helpful.
 - Keep responses under ~10 lines unless the task truly needs more.
+- Try not to use emojis.
 
 Fallbacks
 - If external services fail or rate limits apply, acknowledge briefly and offer the next best alternative.
