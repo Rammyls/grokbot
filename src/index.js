@@ -9,7 +9,7 @@ const {
   GROK_API_KEY,
   BOT_NAME = 'GrokBuddy',
   SUPER_ADMIN_USER_ID,
-  TENOR_API_KEY,
+  GIPHY_API_KEY,
 } = process.env;
 
 if (!DISCORD_TOKEN || !GROK_BASE_URL || !GROK_API_KEY) {
@@ -40,7 +40,7 @@ const config = {
   GROK_API_KEY,
   BOT_NAME,
   SUPER_ADMIN_USER_ID,
-  TENOR_API_KEY,
+  GIPHY_API_KEY,
 };
 
 async function main() {

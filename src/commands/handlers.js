@@ -22,7 +22,7 @@ import {
   deleteBotMessageRecord,
 } from '../memory.js';
 import { checkRateLimit } from '../rateLimit.js';
-import { searchTenorGif } from '../services/media.js';
+import { searchGiphyGif } from '../services/media.js';
 import { handlePrompt } from '../handlers/handlePrompt.js';
 import { DISCORD_INTERACTION_EXPIRED_CODE, DISCORD_UNKNOWN_MESSAGE_CODE, DISCORD_BULK_DELETE_LIMIT, NUMBER_EMOJIS } from '../utils/constants.js';
 import { parseDuration, containsHateSpeech } from '../utils/validators.js';
@@ -179,9 +179,9 @@ export async function executePollCommand(interaction, pollTimers) {
 export async function executeGifCommand(interaction) {
   const query = interaction.options.getString('query', true);
   await interaction.deferReply({ ephemeral: true });
-  const url = await searchTenorGif(query, process.env.TENOR_API_KEY);
+  const url = await searchGiphyGif(query, process.env.GIPHY_API_KEY);
   if (!url) {
-    await interaction.editReply({ content: 'No GIF found or Tenor not configured (set TENOR_API_KEY).' });
+    await interaction.editReply({ content: 'No GIF found or Giphy not configured (set GIPHY_API_KEY).' });
     return;
   }
   const sent = await interaction.channel.send({ content: url });

@@ -64,70 +64,58 @@ function buildGiphyDirectUrl(id) {
   return `https://media.giphy.com/media/${id}/giphy.gif`;
 }
 
-async function resolveTenorDirect(u, tenorApiKey) {
+async function resolveGiphyDirect(u, giphyApiKey) {
   try {
     const url = new URL(u);
-    if (!/tenor\.com$/i.test(url.hostname)) return null;
+    if (!/giphy\.com$/i.test(url.hostname) && !/media\.giphy\.com$/i.test(url.hostname)) return null;
   } catch {
     return null;
   }
-  if (!tenorApiKey) {
-    console.warn('TENOR_API_KEY not set — Tenor URL resolution disabled');
+  if (!giphyApiKey) {
+    console.warn('GIPHY_API_KEY not set — Giphy URL resolution disabled');
     return null;
   }
   try {
-    let q = '';
-    try {
-      const pathSegs = new URL(u).pathname.split('/').filter(Boolean);
-      q = decodeURIComponent(pathSegs[pathSegs.length - 1] || '');
-    } catch {}
-    if (!q) return null;
-    const searchUrl = new URL('https://tenor.googleapis.com/v2/search');
-    searchUrl.searchParams.set('q', q.replace(/[-_]/g, ' '));
-    searchUrl.searchParams.set('key', tenorApiKey);
-    searchUrl.searchParams.set('limit', '1');
-    searchUrl.searchParams.set('media_filter', 'gif');
-    const resp = await fetch(searchUrl);
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const item = data?.results?.[0];
-    const direct = item?.media_formats?.gif?.url || item?.media_formats?.tinygif?.url || null;
-    return direct || null;
+    const giphyId = parseGiphyIdFromUrl(u);
+    if (!giphyId) return null;
+    return buildGiphyDirectUrl(giphyId);
   } catch (err) {
-    console.error('Tenor direct resolution failed:', err);
+    console.error('Giphy direct resolution failed:', err);
     return null;
   }
 }
 
-export async function resolveDirectMediaUrl(u, tenorApiKey) {
+export async function resolveDirectMediaUrl(u, giphyApiKey) {
   const imageExt = /\.(png|jpe?g|webp|gif)(\?.*)?$/i;
   if (imageExt.test(u)) return u;
   const giphyId = parseGiphyIdFromUrl(u);
   if (giphyId) return buildGiphyDirectUrl(giphyId);
-  const tenor = await resolveTenorDirect(u, tenorApiKey);
-  if (tenor) return tenor;
+  const giphy = await resolveGiphyDirect(u, giphyApiKey);
+  if (giphy) return giphy;
   return null;
 }
 
-export async function searchTenorGif(query, tenorApiKey) {
-  if (!tenorApiKey) {
-    console.warn('TENOR_API_KEY not set — Tenor GIFs disabled');
+export async function searchGiphyGif(query, giphyApiKey) {
+  if (!giphyApiKey) {
+    console.warn('GIPHY_API_KEY not set — Giphy GIFs disabled');
     return null;
   }
   try {
-    const url = new URL('https://tenor.googleapis.com/v2/search');
+    const url = new URL('https://api.giphy.com/v1/gifs/search');
     url.searchParams.set('q', query);
-    url.searchParams.set('key', tenorApiKey);
+    url.searchParams.set('api_key', giphyApiKey);
     url.searchParams.set('limit', '1');
-    url.searchParams.set('media_filter', 'gif');
+    url.searchParams.set('rating', 'g');
     const res = await fetch(url, { method: 'GET' });
     if (!res.ok) return null;
     const data = await res.json();
-    const item = data?.results?.[0];
-    const direct = item?.media_formats?.gif?.url || item?.media_formats?.tinygif?.url || null;
-    return direct;
+    const item = data?.data?.[0];
+    const directUrl = item?.url || null;
+    if (!directUrl) return null;
+    const giphyId = directUrl.split('-').pop();
+    return buildGiphyDirectUrl(giphyId);
   } catch (err) {
-    console.error('Tenor API search failed:', err);
+    console.error('Giphy API search failed:', err);
     return null;
   }
 }

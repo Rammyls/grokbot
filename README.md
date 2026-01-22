@@ -12,7 +12,7 @@ A production-ready Discord bot built with **discord.js v14** and Grok (OpenAI-co
 - Message edit handling with re-runs (60s window, throttled).
 - Image support (attachments, embeds, and image URLs) with vision model routing.
 - Polls via reactions with auto-close and results.
-- Tenor GIF search with `/gif`.
+- Giphy GIF search with `/gif`.
 - Admin command to purge bot messages from channels with flexible timeframes.
 
 ## Setup
@@ -38,7 +38,7 @@ Optional:
 - `GROK_VISION_MODEL` (optional override used only when images are present)
 - `BOT_NAME` (default: `GrokBuddy`)
 - `SUPER_ADMIN_USER_ID` (bypasses channel permission checks)
-- `TENOR_API_KEY` (for `/gif` command)
+- `GIPHY_API_KEY` (for `/gif` command)
 
 **AI Intelligence Enhancement Parameters:**
 - `LLM_TEMPERATURE` (default: `0.3`) - Controls randomness (0.0-2.0). Lower = more focused, Higher = more creative
@@ -115,7 +115,7 @@ DMs are allowed for memory writes when the user has memory enabled.
 - Bot auto-closes at the deadline and posts results.
 
 ### GIFs
-- Search Tenor with `/gif query:"cats"` (requires `TENOR_API_KEY`)
+- Search Giphy with `/gif query:"cats"` (requires `GIPHY_API_KEY`)
 
 ### Videos
 - Reply to a video with `@BotName` or use `/ask` while replying; the bot will acknowledge video context. Advanced transcription is not enabled by default.

@@ -67,7 +67,7 @@ export async function handlePrompt({
   const imageInputs = [];
   if (imageUrls?.length) {
     for (const url of imageUrls.slice(0, MAX_IMAGES)) {
-      const dataUrl = await fetchImageAsDataUrl(url, (u) => resolveDirectMediaUrl(u, process.env.TENOR_API_KEY));
+      const dataUrl = await fetchImageAsDataUrl(url, (u) => resolveDirectMediaUrl(u, process.env.GIPHY_API_KEY));
       if (dataUrl) imageInputs.push(dataUrl);
     }
   }
