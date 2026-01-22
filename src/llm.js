@@ -172,8 +172,8 @@ async function callOnce({
     body: JSON.stringify({
       model,
       // Tuning for clearer, more consistent reasoning
-      temperature: 0.2,
-      max_tokens: 4096,
+      temperature: 0.5,
+      max_tokens: 8192,
       messages: buildMessages({
         botName,
         profileSummary,
