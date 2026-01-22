@@ -296,8 +296,10 @@ export async function getLLMResponse({
         recentChannelMessages,
         channelSummary,
         guildSummary,
-        knownUsers,        serverContext,
-        userContext,      });
+        knownUsers,
+        serverContext,
+        userContext,
+      });
     } catch (retryErr) {
       if (retryErr?.code === 'VISION_UNSUPPORTED') {
         return 'image input needs a vision-capable model. set GROK_VISION_MODEL or use a multimodal GROK_MODEL.';
