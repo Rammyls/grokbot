@@ -283,6 +283,7 @@ export async function getLLMResponse({
     if (err?.code === 'VISION_UNSUPPORTED') {
       return 'image input needs a vision-capable model. set GROK_VISION_MODEL or use a multimodal GROK_MODEL.';
     }
+    console.error('LLM request failed (first attempt):', err);
     await delay(300);
     try {
       return await callOnce({
@@ -304,6 +305,7 @@ export async function getLLMResponse({
       if (retryErr?.code === 'VISION_UNSUPPORTED') {
         return 'image input needs a vision-capable model. set GROK_VISION_MODEL or use a multimodal GROK_MODEL.';
       }
+      console.error('LLM request failed (retry):', retryErr);
       return fallbackErrorLine;
     }
   }
