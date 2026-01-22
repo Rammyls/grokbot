@@ -6,42 +6,67 @@ export async function fetchImageAsDataUrl(url, resolveDirectMediaUrl) {
   const resolved = await resolveDirectMediaUrl(url);
   const finalUrl = resolved || url;
   const safe = await isSafeHttpsUrl(finalUrl);
-  if (!safe) return null;
+  if (!safe) {
+    console.warn('Image fetch blocked (unsafe URL):', finalUrl);
+    return null;
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
     const response = await fetch(finalUrl, { signal: controller.signal, redirect: 'follow' });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.warn('Image fetch failed:', finalUrl, response.status);
+      return null;
+    }
     if (response.url && response.url !== finalUrl) {
       const redirectSafe = await isSafeHttpsUrl(response.url);
-      if (!redirectSafe) return null;
+      if (!redirectSafe) {
+        console.warn('Image fetch blocked (unsafe redirect):', response.url);
+        return null;
+      }
     }
     const contentType = response.headers.get('content-type')?.split(';')[0] || '';
 
     const isGif = contentType === 'image/gif' || finalUrl.toLowerCase().endsWith('.gif');
 
     // For GIFs, skip inlining to avoid size limits; let the model fetch directly.
-    if (isGif) return response.url || finalUrl;
+    if (isGif) {
+      console.info('GIF passthrough for vision:', response.url || finalUrl);
+      return response.url || finalUrl;
+    }
 
     const validMimeTypes = [...IMAGE_MIME];
 
-    if (!validMimeTypes.includes(contentType)) return null;
+    if (!validMimeTypes.includes(contentType)) {
+      console.warn('Image fetch rejected (invalid content-type):', contentType, finalUrl);
+      return null;
+    }
 
     const lengthHeader = response.headers.get('content-length');
-    if (lengthHeader && Number(lengthHeader) > MAX_IMAGE_BYTES) return null;
-    if (!response.body) return null;
+    if (lengthHeader && Number(lengthHeader) > MAX_IMAGE_BYTES) {
+      console.warn('Image fetch rejected (too large):', lengthHeader, finalUrl);
+      return null;
+    }
+    if (!response.body) {
+      console.warn('Image fetch failed (empty body):', finalUrl);
+      return null;
+    }
     const chunks = [];
     let total = 0;
     for await (const chunk of response.body) {
       total += chunk.length;
-      if (total > MAX_IMAGE_BYTES) return null;
+      if (total > MAX_IMAGE_BYTES) {
+        console.warn('Image fetch rejected (stream too large):', total, finalUrl);
+        return null;
+      }
       chunks.push(chunk);
     }
     const buffer = Buffer.concat(chunks);
     const base64 = buffer.toString('base64');
     const mimeType = contentType || 'image/png';
     return `data:${mimeType};base64,${base64}`;
-  } catch {
+  } catch (err) {
+    console.error('Image fetch threw error:', finalUrl, err);
     return null;
   } finally {
     clearTimeout(timeout);

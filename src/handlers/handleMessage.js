@@ -93,11 +93,18 @@ export async function handleMessage({ client, message, inMemoryTurns }) {
     ...getMessageImageUrls(message),
     ...(replyContext?.images || []),
   ];
+
+  if (imageUrls.length) {
+    console.info('Collected image URLs:', imageUrls);
+  }
   
   const videoUrls = [
     ...getMessageVideoUrls(message),
     ...(replyContext?.videos || []),
   ];
+  if (videoUrls.length) {
+    console.info('Collected video URLs:', videoUrls);
+  }
   if (!content && !imageUrls.length && !replyContextText) return;
 
   const replyFn = async (text) => {

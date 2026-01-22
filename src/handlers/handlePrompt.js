@@ -73,8 +73,16 @@ export async function handlePrompt({
   if (imageUrls?.length) {
     for (const url of imageUrls.slice(0, MAX_IMAGES)) {
       const dataUrl = await fetchImageAsDataUrl(url, (u) => resolveDirectMediaUrl(u, process.env.GIPHY_API_KEY));
-      if (dataUrl) imageInputs.push(dataUrl);
+      if (dataUrl) {
+        imageInputs.push(dataUrl);
+      } else {
+        console.warn('Image input dropped (failed to resolve):', url);
+      }
     }
+  }
+
+  if (imageInputs.length) {
+    console.info('Prepared image inputs for model:', imageInputs.map((v) => (typeof v === 'string' ? v.slice(0, 80) : v)));
   }
   
   let effectivePrompt = prompt;
@@ -90,6 +98,7 @@ export async function handlePrompt({
   if (videoUrls?.length) {
     const videoNote = `Attached video URLs:\n- ${videoUrls.slice(0, 3).join('\n- ')}`;
     effectivePrompt = effectivePrompt ? `${effectivePrompt}\n${videoNote}` : videoNote;
+    console.info('Video URLs included in prompt:', videoUrls);
   }
   
   function addTurn(role, content) {
