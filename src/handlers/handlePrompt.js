@@ -21,7 +21,7 @@ export async function handlePrompt({
   inMemoryTurns,
   client,
 }) {
-  const rateKey = [prompt, replyContextText || '', ...(imageUrls || [])].join('|');
+  const rateKey = [prompt, replyContextText || '', ...(imageUrls || []), ...(videoUrls || [])].join('|');
   const rate = checkRateLimit(userId, rateKey);
   if (!rate.allow) {
     await reply(rate.message);
@@ -40,6 +40,11 @@ export async function handlePrompt({
       memoryContent = `User sent ${imageUrls.length} image(s).`;
     } else if (imageUrls?.length) {
       memoryContent = `${memoryContent} [shared ${imageUrls.length} image(s)]`;
+    }
+    if (!memoryContent && videoUrls?.length) {
+      memoryContent = `User sent ${videoUrls.length} video(s).`;
+    } else if (videoUrls?.length) {
+      memoryContent = `${memoryContent} [shared ${videoUrls.length} video(s)]`;
     }
     if (!memoryContent && replyContextText) {
       memoryContent = 'User replied to a message.';
@@ -79,6 +84,12 @@ export async function handlePrompt({
     effectivePrompt = 'User referenced a video.';
   } else if (!effectivePrompt && replyContextText) {
     effectivePrompt = 'Following up on the replied message.';
+  }
+
+  // Surface attached videos to the model even if they are not fetched as image inputs.
+  if (videoUrls?.length) {
+    const videoNote = `Attached video URLs:\n- ${videoUrls.slice(0, 3).join('\n- ')}`;
+    effectivePrompt = effectivePrompt ? `${effectivePrompt}\n${videoNote}` : videoNote;
   }
   
   function addTurn(role, content) {

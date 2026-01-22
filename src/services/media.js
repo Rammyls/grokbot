@@ -17,12 +17,16 @@ export async function fetchImageAsDataUrl(url, resolveDirectMediaUrl) {
       if (!redirectSafe) return null;
     }
     const contentType = response.headers.get('content-type')?.split(';')[0] || '';
-    
+
     const isGif = contentType === 'image/gif' || finalUrl.toLowerCase().endsWith('.gif');
-    const validMimeTypes = [...IMAGE_MIME, 'image/gif'];
-    
-    if (!validMimeTypes.includes(contentType) && !isGif) return null;
-    
+
+    // For GIFs, skip inlining to avoid size limits; let the model fetch directly.
+    if (isGif) return response.url || finalUrl;
+
+    const validMimeTypes = [...IMAGE_MIME];
+
+    if (!validMimeTypes.includes(contentType)) return null;
+
     const lengthHeader = response.headers.get('content-length');
     if (lengthHeader && Number(lengthHeader) > MAX_IMAGE_BYTES) return null;
     if (!response.body) return null;
@@ -35,7 +39,7 @@ export async function fetchImageAsDataUrl(url, resolveDirectMediaUrl) {
     }
     const buffer = Buffer.concat(chunks);
     const base64 = buffer.toString('base64');
-    const mimeType = contentType || (isGif ? 'image/gif' : 'image/png');
+    const mimeType = contentType || 'image/png';
     return `data:${mimeType};base64,${base64}`;
   } catch {
     return null;

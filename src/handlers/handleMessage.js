@@ -4,7 +4,7 @@ import { handlePrompt } from './handlePrompt.js';
 import { getMessageImageUrls, getMessageVideoUrls, stripMention, parseQuotedPoll, containsHateSpeech } from '../utils/validators.js';
 import { NUMBER_EMOJIS } from '../utils/constants.js';
 import { createPoll, getPollByMessageId, recordVote, removeVote } from '../polls.js';
-import { getReplyContext, processGifUrl } from '../services/media.js';
+import { getReplyContext } from '../services/media.js';
 import { routeIntent } from '../services/intentRouter.js';
 
 export async function handleMessage({ client, message, inMemoryTurns }) {
@@ -88,25 +88,11 @@ export async function handleMessage({ client, message, inMemoryTurns }) {
     ? `Reply context from ${replyContext.author}: ${replyContext.text || '[no text]'}${(replyContext.videos?.length ? ' [video referenced]' : '')}`
     : '';
   
-  // Collect image URLs and process GIFs
-  let imageUrls = [
+  // Collect image URLs (GIFs remain as URLs so the model can fetch them directly)
+  const imageUrls = [
     ...getMessageImageUrls(message),
     ...(replyContext?.images || []),
   ];
-  
-  // Check for and convert GIFs to PNG sequences
-  const gifFrames = [];
-  for (const url of [...getMessageImageUrls(message), ...(replyContext?.images || [])]) {
-    const frames = await processGifUrl(url);
-    if (frames && frames.length > 0) {
-      gifFrames.push(...frames);
-      // Remove from regular image URLs since we're replacing with frames
-      imageUrls = imageUrls.filter(u => u !== url);
-    }
-  }
-  
-  // Add GIF frames to image URLs
-  imageUrls = [...imageUrls, ...gifFrames];
   
   const videoUrls = [
     ...getMessageVideoUrls(message),
